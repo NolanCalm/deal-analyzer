@@ -134,6 +134,7 @@ CRITICAL EXTRACTION RULES:
 4. **Calculated NOI Check:** If the document explicitly states "Net Operating Income" or "NOI", TRUST THIS NUMBER as the source of truth if your calculations are off. Adjust expenses or add "Reserves/Misc" to bridge the gap.
 5. **Gross Rent:** If "Gross Potential Rent" and "Effective Gross Income" are both present, use "Gross Potential Rent". Convert Annual -> Monthly by dividing by 12.
 6. **Unit Mix:** If specific annual rent or total monthly rent is missing, calculate it: (Avg Rent * Total Units).
+7. **Spaced Text:** Watch out for stylized headers like "1 2 1 U N I T S". Interpret "1 2 1" as 121.
 
 FALLBACK RULES:
 1. **Utilities:** If text says "Individually Metered" or "Tenant Pays", set utilities to a low estimate (e.g. $100/unit for common area) rather than 0.
