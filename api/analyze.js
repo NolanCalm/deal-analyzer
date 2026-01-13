@@ -123,11 +123,23 @@ REQUIRED FIELDS:
 - insurance: Annual insurance cost in USD
 - utilities: Annual utilities cost in USD (if landlord-paid, otherwise 0)
 
-RULES:
-1. Extract exact values when clearly stated in the document
-2. If a value is NOT explicitly shown, estimate using market averages for a comparable multi-family property and include the field name in the "estimates" array
-3. For grossRent, if only annual is shown, divide by 12 for monthly
-4. All dollar amounts should be numbers without currency symbols
+CRITICAL EXTRACTION RULES:
+1. **Financial Tables:** Look for tables labeled "Pro Forma", "Actual", "Current", or "Operations".
+2. **Column Selection:** Always prefer "Current" or "Actual" figures over "Pro Forma" or "Year 1" if available.
+3. **Expenses:** 
+   - Sum up "Real Estate Taxes" for propertyTaxes.
+   - Sum up "Insurance" for insurance.
+   - Sum up "Utilities" (Water, Sewer, Gas, Electric, Trash, Hydro, Oil) for utilities.
+   - Sum up "Repairs", "Maintenance", "Turnover", "Landscaping" for other expenses.
+4. **Calculated NOI Check:** If the document explicitly states "Net Operating Income" or "NOI", TRUST THIS NUMBER as the source of truth if your calculations are off. Adjust expenses or add "Reserves/Misc" to bridge the gap.
+5. **Gross Rent:** If "Gross Potential Rent" and "Effective Gross Income" are both present, use "Gross Potential Rent". Convert Annual -> Monthly by dividing by 12.
+6. **Unit Mix:** If specific annual rent or total monthly rent is missing, calculate it: (Avg Rent * Total Units).
+
+FALLBACK RULES:
+1. **Utilities:** If text says "Individually Metered" or "Tenant Pays", set utilities to a low estimate (e.g. $100/unit for common area) rather than 0.
+2. **Insurance:** If missing, ESTIMATE at $450 per unit/year.
+3. **Property Taxes:** If missing but a mill rate or assessment is roughly known, estimate at 1.1% of Asking Price.
+4. **General:** If a value is NOT explicitly shown, ESTIMATE it based on typical ratios and mark it in "estimates". DO NOT RETURN 0 unless explicitly stated as "Tenant Pays".
 
 OUTPUT FORMAT (JSON only, no markdown):
 {
@@ -136,10 +148,11 @@ OUTPUT FORMAT (JSON only, no markdown):
   "askingPrice": 500000,
   "grossRent": 5000,
   "propertyTaxes": 6000,
-  "insurance": 2400,
-  "utilities": 0,
+  "insurance": 1200,
+  "utilities": 2400,
   "estimates": []
 }`;
+
 
 export default async function handler(req, res) {
     // 1. Only allow POST requests
@@ -147,11 +160,47 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    const { image, mimeType, emailUnlocked } = req.body;
+    const { image, images, mimeType, emailUnlocked, textContext } = req.body;
 
-    // 2. Validate input exists
-    if (!image || !mimeType) {
+    // 2. Validate input exists - Support both single 'image' and 'images' array
+    if ((!image && (!images || images.length === 0)) || !mimeType) {
         return res.status(400).json({ error: 'Missing image data or mimeType' });
+    }
+
+    // Prepare image parts for Gemini
+    const imageParts = [];
+    let totalPayloadSize = 0;
+
+    if (images && images.length > 0) {
+        // Multi-image mode (Visual Compression)
+        for (const imgData of images) {
+            if (typeof imgData !== 'string') {
+                return res.status(400).json({ error: 'Invalid image data in array. Expected base64 string.' });
+            }
+            imageParts.push({
+                inlineData: {
+                    data: imgData,
+                    mimeType: mimeType
+                }
+            });
+            totalPayloadSize += imgData.length;
+        }
+    } else if (image) {
+        // Legacy single-image mode
+        if (typeof image !== 'string') {
+            return res.status(400).json({ error: 'Invalid image data. Expected base64 string.' });
+        }
+        imageParts.push({
+            inlineData: {
+                data: image,
+                mimeType: mimeType
+            }
+        });
+        totalPayloadSize += image.length;
+    }
+
+    if (imageParts.length === 0) {
+        return res.status(400).json({ error: 'No valid image data provided.' });
     }
 
     // 3. Validate mimeType
@@ -162,13 +211,13 @@ export default async function handler(req, res) {
     }
 
     // 4. Validate payload size (5MB max for base64)
-    if (image.length > MAX_PAYLOAD_SIZE) {
-        return res.status(413).json({ error: 'File too large. Maximum 5MB.' });
+    if (totalPayloadSize > MAX_PAYLOAD_SIZE) {
+        return res.status(413).json({ error: `Total file size too large. Maximum ${MAX_PAYLOAD_SIZE / (1024 * 1024)}MB.` });
     }
 
     // 5. Check rate limit
     const clientIP = getClientIP(req);
-    const rateCheck = checkDailyLimit(clientIP, emailUnlocked === true);
+    const rateCheck = await checkDailyLimit(clientIP, emailUnlocked === true); // Await checkDailyLimit
 
     // Set rate limit headers for frontend
     res.setHeader('X-Daily-Remaining', rateCheck.remaining);
@@ -193,16 +242,15 @@ export default async function handler(req, res) {
 
     const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
+    const finalPrompt = textContext
+        ? `${EXTRACTION_PROMPT}\n\nDOCUMENT TEXT CONTEXT (Use this for facts not visible in the provided images):\n${textContext.substring(0, 30000)}`
+        : EXTRACTION_PROMPT;
+
     const requestBody = {
         contents: [{
             parts: [
-                { text: EXTRACTION_PROMPT },
-                {
-                    inlineData: {
-                        mimeType: mimeType,
-                        data: image
-                    }
-                }
+                { text: finalPrompt },
+                ...imageParts
             ]
         }],
         generationConfig: {
@@ -283,10 +331,12 @@ export default async function handler(req, res) {
             }
         }
 
+
         if (!propertyData) {
             console.error('[Backend] All parsing strategies failed');
             console.error('[Backend] Full response:', textContent);
-            throw new Error('Could not parse JSON from AI response');
+            const snippet = textContent.substring(0, 300);
+            throw new Error(`Could not parse JSON from AI response. AI returned: "${snippet}..."`);
         }
 
         return res.status(200).json({
