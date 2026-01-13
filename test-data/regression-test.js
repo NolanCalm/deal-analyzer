@@ -25,7 +25,7 @@ let failedTests = 0;
 // MATH ENGINE (Copied from production code)
 // ═══════════════════════════════════════════════════════════════
 
-const DEFAULT_REPAIRS_RATE = 0.02;
+const DEFAULT_REPAIRS_RATE = 0.08; // % of Gross Annual Income
 const DEFAULT_VACANCY_RATE = 0.05;
 
 function calculateROI(data, options = {}) {
@@ -46,7 +46,7 @@ function calculateROI(data, options = {}) {
     const effectiveGrossIncome = grossAnnual - vacancyLoss;
 
     const operatingExpenses = propertyTaxes + insurance + utilities;
-    const repairs = askingPrice * repairsRate;
+    const repairs = grossAnnual * repairsRate;
     const totalExpenses = operatingExpenses + repairs;
 
     const noi = effectiveGrossIncome - totalExpenses;
@@ -143,9 +143,9 @@ const testProperties = [
             utilities: 5000
         },
         expected: {
-            noi: { value: 45148, tolerance: 100 },
-            capRate: { value: 5.47, tolerance: 0.1 },
-            cashOnCash: { value: -6.20, tolerance: 0.5 },
+            noi: { value: 54556, tolerance: 100 },
+            capRate: { value: 6.61, tolerance: 0.1 },
+            cashOnCash: { value: -0.50, tolerance: 0.5 },
             verdict: 'fair'
         }
     },
@@ -162,10 +162,10 @@ const testProperties = [
             utilities: 498000
         },
         expected: {
-            noi: { value: 1258000, tolerance: 10000 },
-            capRate: { value: 2.64, tolerance: 0.1 },
-            cashOnCash: { value: -20.35, tolerance: 1.0 },
-            verdict: 'poor'
+            noi: { value: 1937997, tolerance: 10000 },
+            capRate: { value: 4.07, tolerance: 0.1 },
+            cashOnCash: { value: -13.21, tolerance: 1.0 },
+            verdict: 'fair'
         }
     },
     {
@@ -181,9 +181,9 @@ const testProperties = [
             utilities: 0
         },
         expected: {
-            noi: { value: 31800, tolerance: 100 },
-            capRate: { value: 1.45, tolerance: 0.1 },
-            cashOnCash: { value: -26.34, tolerance: 1.0 },
+            noi: { value: 67160, tolerance: 100 },
+            capRate: { value: 3.05, tolerance: 0.1 },
+            cashOnCash: { value: -18.30, tolerance: 1.0 },
             verdict: 'poor'
         }
     }

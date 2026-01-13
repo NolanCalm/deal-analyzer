@@ -707,9 +707,10 @@
 
     function calculateROI(data, options = {}) {
       const {
-        vacancyRate = DEFAULT_VACANCY_RATE,
-        repairsRate = DEFAULT_REPAIRS_RATE,
-        loanTerms = { down: 0.20, rate: 0.075, years: 30 }
+        vacancyRate = 0.05,
+        repairsRate = 0.08, // changed to % of Gross Annual Income
+        loanTerms = { down: 0.20, rate: 0.075, years: 30 },
+        useStatedValues = true // Default to trusting broker data
       } = options;
 
       const askingPrice = Number(data.askingPrice) || 0;
@@ -723,10 +724,17 @@
       const effectiveGrossIncome = grossAnnual - vacancyLoss;
 
       const operatingExpenses = propertyTaxes + insurance + utilities;
-      const repairs = askingPrice * repairsRate;
-      const totalExpenses = operatingExpenses + repairs;
 
-      const noi = effectiveGrossIncome - totalExpenses;
+      // FIX: Use % of Gross Income for repairs (Industry Standard) instead of % of Price
+      // Large deals (> $10M) were breaking with 2% of Price ($200k vs $950k)
+      const repairs = grossAnnual * repairsRate;
+
+      const expensesCalculated = operatingExpenses + repairs;
+      const noiCalculated = effectiveGrossIncome - expensesCalculated;
+
+      // Use extracted NOI if available AND we are not stress testing (calculated mode forces our standards)
+      const noi = (useStatedValues && Number(data.noi) > 0) ? Number(data.noi) : noiCalculated;
+
       const capRate = askingPrice > 0 ? (noi / askingPrice) * 100 : 0;
       const maxOffer = noi > 0 ? noi / 0.07 : 0;
 
@@ -774,29 +782,6 @@
       return `${value.toFixed(2)}%`;
     }
 
-    // ==========================================
-    // GEMINI CLIENT - AI Property Extraction
-    // ==========================================
-    const EXTRACTION_PROMPT = `Act as a Senior Real Estate Investment Analyst. 
-Analyze this property document and extract:
-
-REQUIRED FIELDS:
-- address: Full property address
-- units: Number of units (if multi-family)
-- askingPrice: Listed asking price in USD
-- grossRent: Monthly gross rental income in USD
-- propertyTaxes: Annual property taxes in USD
-- insurance: Annual insurance cost in USD
-- utilities: Annual utilities cost in USD (if landlord-paid, otherwise 0)
-
-RULES:
-1. Extract exact values when clearly stated
-2. If a value is NOT shown, estimate using market averages and include field name in "estimates" array
-3. For grossRent, if only annual shown, divide by 12
-4. All dollar amounts should be numbers without currency symbols
-
-OUTPUT FORMAT (JSON only, no markdown):
-{"address":"","units":0,"askingPrice":0,"grossRent":0,"propertyTaxes":0,"insurance":0,"utilities":0,"estimates":[]}`;
 
     /**
  * Call the backend API for property extraction
@@ -1343,7 +1328,8 @@ OUTPUT FORMAT (JSON only, no markdown):
 
     function updateMetrics() {
       const vacancyRate = isStressTest ? 0.10 : 0.05;
-      const metrics = calculateROI(propertyData, { vacancyRate });
+      const useStatedValues = !isStressTest; // If stress testing, force calculated values (ignore broker NOI)
+      const metrics = calculateROI(propertyData, { vacancyRate, useStatedValues });
 
       document.getElementById('metric-noi').textContent = formatCurrency(metrics.noi);
       document.getElementById('metric-caprate').textContent = formatPercent(metrics.capRate);

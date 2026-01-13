@@ -122,6 +122,7 @@ REQUIRED FIELDS:
 - propertyTaxes: Annual property taxes in USD
 - insurance: Annual insurance cost in USD
 - utilities: Annual utilities cost in USD (if landlord-paid, otherwise 0)
+- noi: Net Operating Income (Annual)
 
 CRITICAL EXTRACTION RULES:
 1. **Financial Tables:** Look for tables labeled "Pro Forma", "Actual", "Current", or "Operations".
@@ -131,7 +132,7 @@ CRITICAL EXTRACTION RULES:
    - Sum up "Insurance" for insurance.
    - Sum up "Utilities" (Water, Sewer, Gas, Electric, Trash, Hydro, Oil) for utilities.
    - Sum up "Repairs", "Maintenance", "Turnover", "Landscaping" for other expenses.
-4. **Calculated NOI Check:** If the document explicitly states "Net Operating Income" or "NOI", TRUST THIS NUMBER as the source of truth if your calculations are off. Adjust expenses or add "Reserves/Misc" to bridge the gap.
+4. **Calculated NOI Check:** If the document explicitly states "Net Operating Income" or "NOI", TRUST THIS NUMBER and populate the 'noi' field.
 5. **Gross Rent:** If "Gross Potential Rent" and "Effective Gross Income" are both present, use "Gross Potential Rent". Convert Annual -> Monthly by dividing by 12.
 6. **Unit Mix:** If specific annual rent or total monthly rent is missing, calculate it: (Avg Rent * Total Units).
 7. **Spaced Text:** Watch out for stylized headers like "1 2 1 U N I T S". Interpret "1 2 1" as 121.
@@ -143,16 +144,8 @@ FALLBACK RULES:
 4. **General:** If a value is NOT explicitly shown, ESTIMATE it based on typical ratios and mark it in "estimates". DO NOT RETURN 0 unless explicitly stated as "Tenant Pays".
 
 OUTPUT FORMAT (JSON only, no markdown):
-{
-  "address": "123 Main Street, City, ST 12345",
-  "units": 4,
-  "askingPrice": 500000,
-  "grossRent": 5000,
-  "propertyTaxes": 6000,
-  "insurance": 1200,
-  "utilities": 2400,
-  "estimates": []
-}`;
+{"address":"","units":0,"askingPrice":0,"grossRent":0,"propertyTaxes":0,"insurance":0,"utilities":0,"noi":0,"estimates":[]}
+`;
 
 
 export default async function handler(req, res) {
