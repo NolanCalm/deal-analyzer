@@ -1,0 +1,16 @@
+{
+    "name": "deal-analyzer",
+    "version": "1.0.0",
+    "description": "Property Deal Analyzer MVP",
+    "scripts": {
+        "start": "vercel dev",
+        "test": "node test-data/e2e-validation.js"
+    },
+    "dependencies": {
+        "@google/generative-ai": "^0.2.0",
+        "pdfjs-dist": "^3.11.174"
+    },
+    "devDependencies": {
+        "vercel": "latest"
+    }
+}

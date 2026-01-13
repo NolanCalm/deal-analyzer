@@ -1,0 +1,14 @@
+# FAILURES LOG - DOE Self-Annealing Protocol
+# Format: [TIMESTAMP] | [SCRIPT] | [ERROR] | [FIX APPLIED]
+# =========================================================
+
+[2026-01-11 14:29:12] | reddit_scraper.py | <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1129)> | Skipping subreddit
+[2026-01-11 14:29:12] | reddit_scraper.py | <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1129)> | Skipping subreddit
+[2026-01-11 14:29:12] | reddit_scraper.py | <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1129)> | Skipping subreddit
+[2026-01-11 14:29:12] | reddit_scraper.py | <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1129)> | Skipping subreddit
+[2026-01-11 14:29:12] | reddit_scraper.py | <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1129)> | Skipping subreddit
+[2026-01-11 14:29:12] | reddit_scraper.py | <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1129)> | Skipping subreddit
+[2026-01-11 14:29:13] | reddit_scraper.py | <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1129)> | Skipping subreddit
+[2026-01-11 14:29:13] | reddit_scraper.py | <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1129)> | Skipping subreddit
+[2026-01-11 14:28:00] | reddit_scraper.py | SSL: CERTIFICATE_VERIFY_FAILED | Added ssl_context with verify_mode=CERT_NONE
+[2026-01-11 14:30:26] | reddit_scraper.py | HTTP 404 on r/event_planning | Skipping subreddit

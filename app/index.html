@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Property Deal Analyzer | AI-Powered Investment Analysis</title>
+  <meta name="description"
+    content="Upload a broker flyer, get instant investment math. One-button analysis for real estate investors.">
+
+  <!-- Favicon (inline SVG to avoid 404) -->
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
+
+  <!-- Open Graph / Social Sharing -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Property Deal Analyzer | AI-Powered Investment Math">
+  <meta property="og:description"
+    content="Upload a broker flyer, get instant investment math. One-button analysis for real estate investors.">
+  <meta property="og:image" content="https://via.placeholder.com/1200x630/0a0a0b/22c55e?text=🏢+Property+Deal+Analyzer">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Bricolage Grotesque + Newsreader -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;700&family=Newsreader:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap"
+    rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Bricolage Grotesque', 'system-ui', 'sans-serif'],
+            serif: ['Newsreader', 'Georgia', 'serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          colors: {
+            surface: {
+              950: '#0a0a0d',
+              850: '#16161a',
+              800: '#1a1a1f'
+            },
+            ivory: '#f5f0e8',
+            gold: '#c9a962',
+            emerald: '#2dd4a8',
+            coral: '#f07167'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* CSS Variables */
+    :root {
+      --surface-950: #0a0a0d;
+      --surface-850: #16161a;
+      --surface-800: #1a1a1f;
+      --ivory: #f5f0e8;
+      --gold: #c9a962;
+      --emerald: #2dd4a8;
+      --coral: #f07167;
+    }
+
+    /* Base Styles */
+    body {
+      background: linear-gradient(135deg, var(--surface-950) 0%, #0f0f1a 50%, var(--surface-950) 100%);
+      min-height: 100vh;
+      color: var(--ivory);
+      position: relative;
+    }
+
+    /* Noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.02;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    /* Glass Effect */
+    .glass {
+      background: rgba(22, 22, 26, 0.4);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(245, 240, 232, 0.06);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .glass:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+      border-color: rgba(245, 240, 232, 0.1);
+    }
+
+    .glass-strong {
+      background: rgba(22, 22, 26, 0.6);
+      backdrop-filter: blur(32px);
+      border: 1px solid rgba(245, 240, 232, 0.1);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Upload Zone */
+    .upload-zone {
+      background: linear-gradient(135deg, rgba(45, 212, 168, 0.08) 0%, rgba(45, 212, 168, 0.02) 100%);
+      border: 2px dashed rgba(45, 212, 168, 0.3);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: rgba(45, 212, 168, 0.6);
+      background: linear-gradient(135deg, rgba(45, 212, 168, 0.12) 0%, rgba(45, 212, 168, 0.04) 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(45, 212, 168, 0.1);
+    }
+
+    /* Input Fields */
+    .field-input {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(245, 240, 232, 0.1);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      color: var(--ivory);
+    }
+
+    .field-input:focus-visible {
+      border-color: rgba(45, 212, 168, 0.5);
+      box-shadow: 0 0 0 3px rgba(45, 212, 168, 0.15);
+      outline: none;
+    }
+
+    /* Metric Cards */
+    .metric-card {
+      background: linear-gradient(135deg, rgba(245, 240, 232, 0.03) 0%, rgba(245, 240, 232, 0.01) 100%);
+      border: 1px solid rgba(245, 240, 232, 0.08);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .metric-card:hover {
+      transform: translateY(-1px);
+      border-color: rgba(245, 240, 232, 0.12);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Badge animations */
+    .badge-estimated {
+      animation: pulse-amber 2s infinite;
+    }
+
+    @keyframes pulse-amber {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(201, 169, 98, 0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 0 6px rgba(201, 169, 98, 0);
+      }
+    }
+
+    /* Loading spinner */
+    .spinner {
+      border: 3px solid rgba(45, 212, 168, 0.2);
+      border-top-color: var(--emerald);
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Entrance animations */
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-fadeUp {
+      animation: fadeUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    /* Stagger delays */
+    .delay-1 {
+      animation-delay: 0.08s;
+    }
+
+    .delay-2 {
+      animation-delay: 0.16s;
+    }
+
+    .delay-3 {
+      animation-delay: 0.24s;
+    }
+
+    /* Verdict colors */
+    .verdict-excellent {
+      color: var(--emerald);
+    }
+
+    .verdict-good {
+      color: var(--gold);
+    }
+
+    .verdict-fair {
+      color: #f59e0b;
+    }
+
+    .verdict-poor {
+      color: var(--coral);
+    }
+
+    /* Accessibility: Reduced Motion */
+    @media (prefers-reduced-motion: reduce) {
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Print Styles */
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+
+      body {
+        background: white !important;
+        color: black !important;
+        font-size: 12pt;
+        font-family: 'Newsreader', Georgia, serif !important;
+      }
+
+      body::before {
+        display: none;
+      }
+
+      .print-only {
+        display: block !important;
+      }
+
+      /* Force all text to be readable in print */
+      * {
+        color: black !important;
+      }
+
+      .glass,
+      .glass-strong,
+      .metric-card {
+        background: white !important;
+        border: 1px solid #ddd !important;
+        backdrop-filter: none !important;
+        box-shadow: none !important;
+      }
+
+      .printable-scorecard {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        padding: 20px;
+      }
+
+      /* Print footer styling */
+      footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 12px 0;
+        border-top: 1px solid #ddd;
+        background: white;
+        text-align: center;
+        font-size: 9pt;
+        color: #666 !important;
+      }
+    }
+
+    .print-only {
+      display: none;
+    }
+  </style>
+</head>
+
+<body class="font-sans antialiased">
+
+  <!-- Header -->
+  <header class="no-print border-b border-ivory/5 py-4 animate-fadeUp">
+    <div class="max-w-6xl mx-auto px-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div
+          class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald to-emerald/70 flex items-center justify-center text-xl">
+          🏢
+        </div>
+        <div>
+          <h1 class="font-bold text-lg tracking-tight text-ivory">Property Deal Analyzer</h1>
+          <p class="text-xs text-ivory/40 font-serif">AI-Powered Investment Math</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <button id="reset-app" class="text-xs text-ivory/40 hover:text-coral transition-colors font-serif">
+          Clear Data
+        </button>
+        <!-- Usage Counter Pill -->
+        <div id="usage-pill"
+          class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald/10 border border-emerald/20 transition-all">
+          <span class="text-emerald text-sm font-mono" id="usage-count">8/8</span>
+          <span class="text-ivory/40 text-xs">free</span>
+        </div>
+        <div id="api-status" class="flex items-center gap-2 text-xs">
+          <span class="w-2 h-2 rounded-full bg-gold"></span>
+          <span class="text-ivory/50 font-serif">Connecting...</span>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main App -->
+  <main class="max-w-6xl mx-auto px-4 py-8">
+
+    <!-- API Key Modal - REMOVED (Now using backend API key) -->
+
+
+    <!-- Two Column Layout -->
+    <div class="grid lg:grid-cols-2 gap-6">
+
+      <!-- Left Column: Upload + Data -->
+      <div class="space-y-6">
+
+        <!-- File Upload Zone -->
+        <section id="upload-section" class="no-print glass rounded-2xl p-6 animate-fadeUp delay-1">
+          <h2 class="font-semibold mb-4 flex items-center gap-2 text-ivory">
+            <span class="text-emerald">01</span> Upload Property Flyer
+          </h2>
+
+          <div id="upload-zone" class="upload-zone rounded-xl p-8 text-center cursor-pointer">
+            <div id="upload-idle" class="space-y-3">
+              <div class="text-4xl">📄</div>
+              <p class="font-medium text-ivory">Drop PDF or Image here</p>
+              <p class="text-sm text-ivory/40 font-serif">or click to browse • Large files supported (Auto-optimized)
+              </p>
+            </div>
+
+            <div id="upload-loading" class="hidden space-y-4">
+              <div class="spinner w-12 h-12 rounded-full mx-auto"></div>
+              <p id="loading-text" class="font-medium text-emerald">AI is auditing pro-forma...</p>
+              <p class="text-sm text-ivory/40 font-serif">Extracting property data</p>
+            </div>
+
+            <input type="file" id="file-input" accept="image/*,application/pdf" capture="environment" class="hidden">
+          </div>
+
+          <!-- Preview -->
+          <div id="file-preview" class="hidden mt-4 p-3 rounded-xl bg-black/30 flex items-center gap-3">
+            <div class="w-12 h-12 rounded-lg bg-ivory/5 flex items-center justify-center text-2xl" id="preview-icon">📄
+            </div>
+            <div class="flex-1 min-w-0">
+              <p id="preview-name" class="font-medium truncate text-ivory">filename.pdf</p>
+              <p id="preview-size" class="text-xs text-ivory/40 font-serif">2.3 MB</p>
+            </div>
+            <button id="clear-file" class="text-ivory/40 hover:text-ivory">✕</button>
+          </div>
+        </section>
+
+        <!-- Email Capture Banner (shows when approaching limit) -->
+        <div id="email-capture"
+          class="hidden no-print p-4 rounded-xl bg-gradient-to-r from-gold/10 to-transparent border border-gold/20 animate-fadeUp">
+          <p class="text-sm text-ivory mb-3">
+            ⚡ <strong>Want 10 more analyses?</strong> Get bonus uses + early Pro access.
+          </p>
+          <div class="flex gap-2">
+            <input type="email" id="capture-email" placeholder="your@email.com"
+              class="flex-1 px-3 py-2 rounded-lg bg-black/30 border border-ivory/10 text-ivory focus:border-gold/50 focus:outline-none transition-colors">
+            <button id="capture-submit"
+              class="px-4 py-2 rounded-lg bg-gold text-surface-950 font-bold hover:bg-gold/90 transition-colors">
+              Unlock ✨
+            </button>
+          </div>
+          <p class="text-xs text-ivory/30 mt-2">Join 47+ investors using this tool. No spam, unsubscribe anytime.</p>
+        </div>
+
+        <!-- Blocked State (shows when daily limit reached) -->
+        <div id="blocked-state" class="hidden no-print glass rounded-2xl p-8 text-center animate-fadeUp">
+          <p class="text-3xl mb-3">🔒</p>
+          <p class="text-ivory font-bold text-lg">Daily limit reached</p>
+          <p class="text-ivory/50 text-sm mt-2">You've analyzed a lot of properties today!</p>
+
+          <!-- Pro CTA -->
+          <div
+            class="mt-6 p-4 rounded-xl bg-gradient-to-r from-emerald/10 to-transparent border border-emerald/20 max-w-sm mx-auto">
+            <p class="text-emerald font-bold">🚀 Need unlimited analyses?</p>
+            <p class="text-ivory/60 text-sm mt-1">Pro tier launching soon. Get early access.</p>
+            <a href="mailto:hello@dealanalyzer.com?subject=Pro%20Access%20Interest"
+              class="inline-block mt-3 px-4 py-2 rounded-lg bg-emerald text-surface-950 font-bold text-sm hover:bg-emerald/90 transition-colors">
+              Request Pro Access →
+            </a>
+          </div>
+
+          <p class="text-ivory/30 text-xs mt-4">Or come back tomorrow for 8 more free analyses</p>
+        </div>
+
+        <!-- Property Data Card -->
+        <section id="data-section" class="no-print glass rounded-2xl p-6 hidden animate-fadeUp delay-2">
+          <h2 class="font-semibold mb-4 flex items-center gap-2 text-ivory">
+            <span class="text-emerald">02</span> Extracted Data
+            <span class="text-xs text-ivory/40 font-serif font-normal ml-auto">Click values to edit</span>
+          </h2>
+
+          <div class="grid gap-4">
+            <!-- Address -->
+            <div>
+              <label class="text-xs text-white/50 uppercase tracking-wider">Property Address</label>
+              <input type="text" id="field-address" class="field-input w-full px-3 py-2 rounded-lg mt-1 text-white">
+            </div>
+
+            <!-- Row: Units + Price -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="text-xs text-white/50 uppercase tracking-wider flex items-center gap-2">
+                  Units
+                  <span id="badge-units"
+                    class="hidden badge-estimated text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">EST</span>
+                </label>
+                <input type="number" id="field-units" class="field-input w-full px-3 py-2 rounded-lg mt-1 text-white"
+                  min="1">
+              </div>
+              <div>
+                <label class="text-xs text-white/50 uppercase tracking-wider flex items-center gap-2">
+                  Asking Price
+                  <span id="badge-askingPrice"
+                    class="hidden badge-estimated text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">EST</span>
+                </label>
+                <div class="relative mt-1">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-white/40">$</span>
+                  <input type="number" id="field-askingPrice"
+                    class="field-input w-full pl-7 pr-3 py-2 rounded-lg text-white">
+                </div>
+              </div>
+            </div>
+
+            <!-- Row: Gross Rent -->
+            <div>
+              <label class="text-xs text-white/50 uppercase tracking-wider flex items-center gap-2">
+                Monthly Gross Rent
+                <span id="badge-grossRent"
+                  class="hidden badge-estimated text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">EST</span>
+              </label>
+              <div class="relative mt-1">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-white/40">$</span>
+                <input type="number" id="field-grossRent"
+                  class="field-input w-full pl-7 pr-3 py-2 rounded-lg text-white">
+              </div>
+            </div>
+
+            <!-- Row: Taxes + Insurance + Utilities -->
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="text-xs text-white/50 uppercase tracking-wider flex items-center gap-2">
+                  Taxes/yr
+                  <span id="badge-propertyTaxes"
+                    class="hidden badge-estimated text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">EST</span>
+                </label>
+                <div class="relative mt-1">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">$</span>
+                  <input type="number" id="field-propertyTaxes"
+                    class="field-input w-full pl-6 pr-2 py-2 rounded-lg text-white text-sm">
+                </div>
+              </div>
+              <div>
+                <label class="text-xs text-white/50 uppercase tracking-wider flex items-center gap-2">
+                  Insurance
+                  <span id="badge-insurance"
+                    class="hidden badge-estimated text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">EST</span>
+                </label>
+                <div class="relative mt-1">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">$</span>
+                  <input type="number" id="field-insurance"
+                    class="field-input w-full pl-6 pr-2 py-2 rounded-lg text-white text-sm">
+                </div>
+              </div>
+              <div>
+                <label class="text-xs text-white/50 uppercase tracking-wider flex items-center gap-2">
+                  Utilities
+                  <span id="badge-utilities"
+                    class="hidden badge-estimated text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">EST</span>
+                </label>
+                <div class="relative mt-1">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">$</span>
+                  <input type="number" id="field-utilities"
+                    class="field-input w-full pl-6 pr-2 py-2 rounded-lg text-white text-sm">
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Right Column: Metrics -->
+      <div class="space-y-6">
+
+        <!-- Investment Metrics -->
+        <section id="metrics-section" class="no-print glass rounded-2xl p-6 hidden animate-fadeUp delay-3">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold flex items-center gap-2 text-ivory">
+              <span class="text-emerald">03</span> Investment Metrics
+            </h2>
+
+            <!-- Stress Test Toggle -->
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <span class="text-ivory/50 font-serif">Stress Test</span>
+              <div class="relative">
+                <input type="checkbox" id="stress-toggle" class="sr-only peer">
+                <div class="w-10 h-5 bg-ivory/10 rounded-full peer-checked:bg-gold/30 transition-colors"></div>
+                <div
+                  class="absolute top-0.5 left-0.5 w-4 h-4 bg-ivory/50 rounded-full peer-checked:translate-x-5 peer-checked:bg-gold transition-transform">
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Verdict Banner -->
+          <div id="verdict-banner"
+            class="mb-6 p-4 rounded-xl bg-gradient-to-r from-emerald/10 to-transparent border border-emerald/20">
+            <div class="flex items-center gap-3">
+              <span id="verdict-emoji" class="text-3xl">🟢</span>
+              <div>
+                <p id="verdict-text" class="font-bold text-lg verdict-excellent">Strong Buy</p>
+                <p id="verdict-sub" class="text-sm text-ivory/60 font-serif">At this price, you're getting solid returns
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Metric Grid -->
+          <div class="grid grid-cols-2 gap-4">
+
+            <div class="metric-card rounded-xl p-4">
+              <p class="text-xs text-white/50 uppercase tracking-wider mb-1">Net Operating Income</p>
+              <p id="metric-noi" class="text-2xl font-bold font-mono text-white">$0</p>
+              <p class="text-xs text-white/40">Per year</p>
+            </div>
+
+            <div class="metric-card rounded-xl p-4">
+              <p class="text-xs text-white/50 uppercase tracking-wider mb-1">Cap Rate</p>
+              <p id="metric-caprate" class="text-2xl font-bold font-mono text-white">0.00%</p>
+              <p class="text-xs text-white/40">All-cash return</p>
+            </div>
+
+            <div class="metric-card rounded-xl p-4">
+              <p class="text-xs text-white/50 uppercase tracking-wider mb-1">Cash-on-Cash</p>
+              <p id="metric-coc" class="text-2xl font-bold font-mono text-white">0.00%</p>
+              <p class="text-xs text-white/40">20% down, 7.5% rate</p>
+            </div>
+
+            <div class="metric-card rounded-xl p-4 bg-gradient-to-br from-emerald/10 to-emerald/5 border-emerald/20">
+              <p class="text-xs text-emerald uppercase tracking-wider mb-1 font-serif">Max Offer (7% Cap)</p>
+              <p id="metric-maxoffer" class="text-2xl font-bold font-mono text-emerald">$0</p>
+              <p class="text-xs text-ivory/40 font-serif">Your ceiling</p>
+            </div>
+
+          </div>
+
+          <!-- Monthly Breakdown -->
+          <div class="mt-6 p-4 rounded-xl bg-black/20">
+            <p class="text-xs text-white/50 uppercase tracking-wider mb-3">Monthly Cash Flow (Financed)</p>
+            <div class="flex items-center justify-between">
+              <span class="text-white/70">After mortgage payment</span>
+              <span id="metric-monthly" class="text-xl font-bold font-mono text-white">$0</span>
+            </div>
+          </div>
+
+          <!-- Print Button -->
+          <button id="print-btn"
+            class="mt-6 w-full py-4 px-6 rounded-xl bg-gradient-to-r from-emerald to-emerald/80 font-bold text-lg text-surface-950 hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+            <span>📄</span> Generate Offer Scorecard
+          </button>
+
+        </section>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Print-Only Scorecard -->
+  <div id="printable-scorecard" class="print-only printable-scorecard p-8 bg-white text-black">
+    <div class="border-2 border-black p-6">
+      <div class="text-center border-b-2 border-black pb-4 mb-6">
+        <h1 class="text-2xl font-bold" style="color: black !important;">PROPERTY DEAL SCORECARD</h1>
+        <p id="print-address" class="text-lg mt-2" style="color: black !important;">123 Main Street</p>
+        <p id="print-date" class="text-sm mt-1" style="color: #666 !important;">Generated: Jan 11, 2026</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-8">
+        <div>
+          <h2 class="font-bold text-lg border-b border-gray-300 pb-2 mb-4" style="color: black !important;">EXTRACTED
+            DATA</h2>
+          <table class="w-full" style="color: black !important;">
+            <tr>
+              <td class="py-1">Units:</td>
+              <td id="print-units" class="text-right font-mono">4</td>
+            </tr>
+            <tr>
+              <td class="py-1">Asking Price:</td>
+              <td id="print-price" class="text-right font-mono">$500,000</td>
+            </tr>
+            <tr>
+              <td class="py-1">Monthly Rent:</td>
+              <td id="print-rent" class="text-right font-mono">$5,000</td>
+            </tr>
+            <tr>
+              <td class="py-1">Annual Taxes:</td>
+              <td id="print-taxes" class="text-right font-mono">$6,000</td>
+            </tr>
+            <tr>
+              <td class="py-1">Annual Insurance:</td>
+              <td id="print-insurance" class="text-right font-mono">$2,400</td>
+            </tr>
+          </table>
+        </div>
+
+        <div>
+          <h2 class="font-bold text-lg border-b border-gray-300 pb-2 mb-4" style="color: black !important;">INVESTMENT
+            METRICS</h2>
+          <table class="w-full" style="color: black !important;">
+            <tr>
+              <td class="py-1">NOI:</td>
+              <td id="print-noi" class="text-right font-mono font-bold">$0</td>
+            </tr>
+            <tr>
+              <td class="py-1">Cap Rate:</td>
+              <td id="print-caprate" class="text-right font-mono font-bold">0.00%</td>
+            </tr>
+            <tr>
+              <td class="py-1">Cash-on-Cash:</td>
+              <td id="print-coc" class="text-right font-mono font-bold">0.00%</td>
+            </tr>
+            <tr style="color: #059669 !important;">
+              <td class="py-1 font-bold">Max Offer:</td>
+              <td id="print-maxoffer" class="text-right font-mono font-bold">$0</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="mt-6 p-4 rounded" style="background: #f3f4f6 !important; color: black !important;">
+        <h3 class="font-bold mb-2" style="color: black !important;">RECOMMENDATION</h3>
+        <p id="print-recommendation" style="color: black !important;">At asking price, this deal yields X%. For a 7% cap
+          rate, offer no more than
+          $XXX,XXX.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="no-print border-t border-white/5 py-6 mt-12">
+    <div class="max-w-6xl mx-auto px-4 text-center text-sm text-white/30">
+      <p>Property Deal Analyzer • AI-Powered Investment Analysis</p>
+    </div>
+  </footer>
+
+  <!-- Print-Only Footer -->
+  <footer class="print-only">
+    <p>Property Deal Analyzer • AI-Powered Investment Analysis</p>
+  </footer>
+
+  <!-- Scripts (Inlined to work on file:// protocol) -->
+  <!-- PDF Lib -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    // Initialize PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+
+  <script>
+    // ==========================================
+    // MATH ENGINE - Real Estate Investment Math
+    // ==========================================
+    const DEFAULT_REPAIRS_RATE = 0.02;
+    const DEFAULT_VACANCY_RATE = 0.05;
+
+    function calculateROI(data, options = {}) {
+      const {
+        vacancyRate = DEFAULT_VACANCY_RATE,
+        repairsRate = DEFAULT_REPAIRS_RATE,
+        loanTerms = { down: 0.20, rate: 0.075, years: 30 }
+      } = options;
+
+      const askingPrice = Number(data.askingPrice) || 0;
+      const grossRent = Number(data.grossRent) || 0;
+      const propertyTaxes = Number(data.propertyTaxes) || 0;
+      const insurance = Number(data.insurance) || 0;
+      const utilities = Number(data.utilities) || 0;
+
+      const grossAnnual = grossRent * 12;
+      const vacancyLoss = grossAnnual * vacancyRate;
+      const effectiveGrossIncome = grossAnnual - vacancyLoss;
+
+      const operatingExpenses = propertyTaxes + insurance + utilities;
+      const repairs = askingPrice * repairsRate;
+      const totalExpenses = operatingExpenses + repairs;
+
+      const noi = effectiveGrossIncome - totalExpenses;
+      const capRate = askingPrice > 0 ? (noi / askingPrice) * 100 : 0;
+      const maxOffer = noi > 0 ? noi / 0.07 : 0;
+
+      const downPayment = askingPrice * loanTerms.down;
+      const loanAmount = askingPrice * (1 - loanTerms.down);
+
+      const monthlyRate = loanTerms.rate / 12;
+      const numPayments = loanTerms.years * 12;
+      const monthlyPayment = loanAmount > 0
+        ? (loanAmount * monthlyRate * Math.pow(1 + monthlyRate, numPayments))
+        / (Math.pow(1 + monthlyRate, numPayments) - 1)
+        : 0;
+
+      const annualDebtService = monthlyPayment * 12;
+      const cashFlow = noi - annualDebtService;
+      const cashOnCash = downPayment > 0 ? (cashFlow / downPayment) * 100 : 0;
+
+      return {
+        noi, capRate, maxOffer, downPayment, loanAmount,
+        monthlyPayment, annualDebtService, cashFlow, cashOnCash,
+        dealVerdict: getDealVerdict(capRate, cashOnCash)
+      };
+    }
+
+    function getDealVerdict(capRate, cashOnCash) {
+      if (capRate >= 8 && cashOnCash >= 10) {
+        return { rating: 'excellent', emoji: '🟢', text: 'Strong Buy' };
+      } else if (capRate >= 6 && cashOnCash >= 5) {
+        return { rating: 'good', emoji: '🟡', text: 'Worth Negotiating' };
+      } else if (capRate >= 4) {
+        return { rating: 'fair', emoji: '🟠', text: 'Below Market - Negotiate Hard' };
+      } else {
+        return { rating: 'poor', emoji: '🔴', text: 'Walk Away' };
+      }
+    }
+
+    function formatCurrency(value) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency', currency: 'USD',
+        minimumFractionDigits: 0, maximumFractionDigits: 0
+      }).format(value);
+    }
+
+    function formatPercent(value) {
+      return `${value.toFixed(2)}%`;
+    }
+
+    // ==========================================
+    // GEMINI CLIENT - AI Property Extraction
+    // ==========================================
+    const EXTRACTION_PROMPT = `Act as a Senior Real Estate Investment Analyst. 
+Analyze this property document and extract:
+
+REQUIRED FIELDS:
+- address: Full property address
+- units: Number of units (if multi-family)
+- askingPrice: Listed asking price in USD
+- grossRent: Monthly gross rental income in USD
+- propertyTaxes: Annual property taxes in USD
+- insurance: Annual insurance cost in USD
+- utilities: Annual utilities cost in USD (if landlord-paid, otherwise 0)
+
+RULES:
+1. Extract exact values when clearly stated
+2. If a value is NOT shown, estimate using market averages and include field name in "estimates" array
+3. For grossRent, if only annual shown, divide by 12
+4. All dollar amounts should be numbers without currency symbols
+
+OUTPUT FORMAT (JSON only, no markdown):
+{"address":"","units":0,"askingPrice":0,"grossRent":0,"propertyTaxes":0,"insurance":0,"utilities":0,"estimates":[]}`;
+
+    /**
+ * Call the backend API for property extraction
+ * Supports Visual Compression (Multi-Page JPEGs) for PDFs
+ */
+    async function extractPropertyData(file) {
+      const mimeType = file.type || 'image/jpeg';
+      const emailUnlocked = !!localStorage.getItem(STORAGE_KEYS.EMAIL);
+
+      let payload = {
+        mimeType: mimeType,
+        emailUnlocked: emailUnlocked
+      };
+
+      try {
+        if (mimeType === 'application/pdf') {
+          const { images, text } = await processPdfSmart(file);
+          payload.images = images;
+          payload.textContext = text;
+          payload.mimeType = 'image/jpeg';
+        } else {
+          payload.image = await fileToBase64(file);
+        }
+
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        // Handle rate limit response
+        if (response.status === 429) {
+          return {
+            success: false,
+            error: data.error || 'Daily limit reached',
+            remaining: data.remaining,
+            limit: data.limit,
+            needsEmail: data.needsEmail
+          };
+        }
+
+        if (!response.ok) {
+          throw new Error(data.error || `API Error: ${response.status}`);
+        }
+
+        return data;
+      } catch (error) {
+        console.error('Extraction error (Detailed):', error);
+        return { success: false, error: `${error.name}: ${error.message}` };
+      }
+    }
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ==========================================
+    // APP STATE & DOM
+    // ==========================================
+
+    let propertyData = {
+      address: '', units: 0, askingPrice: 0, grossRent: 0,
+      propertyTaxes: 0, insurance: 0, utilities: 0
+    };
+    let estimates = [];
+    let isStressTest = false;
+
+    // Usage tracking state
+    const STORAGE_KEYS = {
+      PROPERTY_DATA: 'last_property_data',
+      USAGE: 'daily_usage',
+      EMAIL: 'captured_email',
+      EMAIL_SUBMISSIONS: 'email_submissions'
+    };
+
+    // Formspree endpoint - Replace YOUR_FORM_ID with your actual Formspree form ID
+    const FORMSPREE_ENDPOINT = 'https://formspree.io/f/YOUR_FORM_ID';
+
+    // DOM Elements
+    const apiStatus = document.getElementById('api-status');
+    const resetAppBtn = document.getElementById('reset-app');
+
+    // Usage UI elements
+    const usagePill = document.getElementById('usage-pill');
+    const usageCount = document.getElementById('usage-count');
+    const emailCapture = document.getElementById('email-capture');
+    const captureEmail = document.getElementById('capture-email');
+    const captureSubmit = document.getElementById('capture-submit');
+    const blockedState = document.getElementById('blocked-state');
+
+    const uploadZone = document.getElementById('upload-zone');
+    const uploadSection = document.getElementById('upload-section');
+    const fileInput = document.getElementById('file-input');
+    const uploadIdle = document.getElementById('upload-idle');
+    const uploadLoading = document.getElementById('upload-loading');
+    const filePreview = document.getElementById('file-preview');
+    const clearFileBtn = document.getElementById('clear-file');
+
+    const dataSection = document.getElementById('data-section');
+    const metricsSection = document.getElementById('metrics-section');
+
+    const stressToggle = document.getElementById('stress-toggle');
+    const printBtn = document.getElementById('print-btn');
+
+    // Initialize
+    function init() {
+      // Cleanup old API keys from previous architecture
+      localStorage.removeItem('gemini_api_key');
+
+      // Set status to ready (using server-side API)
+      apiStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald"></span><span class="text-ivory/50 font-serif">AI Ready</span>';
+
+      // Initialize usage tracking
+      initUsageState();
+
+      // Load saved property data
+      const savedData = localStorage.getItem(STORAGE_KEYS.PROPERTY_DATA);
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          propertyData = parsed.data;
+          estimates = parsed.estimates || [];
+          showDataAndMetrics();
+        } catch (e) { }
+      }
+
+      setupEventListeners();
+    }
+
+    // ==========================================
+    // USAGE STATE MANAGEMENT
+    // ==========================================
+
+    function getUsageState() {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.USAGE) || '{}');
+      const today = new Date().toISOString().split('T')[0];
+
+      // Reset if new day
+      if (stored.date !== today) {
+        return { date: today, count: 0, remaining: 8, limit: 8, emailUnlocked: false };
+      }
+      return stored;
+    }
+
+    function saveUsageState(state) {
+      localStorage.setItem(STORAGE_KEYS.USAGE, JSON.stringify(state));
+    }
+
+    function initUsageState() {
+      const usage = getUsageState();
+      const hasEmail = !!localStorage.getItem(STORAGE_KEYS.EMAIL);
+
+      // Default remaining for fresh state
+      const remaining = usage.remaining !== undefined ? usage.remaining : (hasEmail ? 18 : 8);
+      const limit = hasEmail ? 18 : 8;
+
+      updateUsageUI(remaining, limit);
+      checkUsageThresholds(remaining, limit, hasEmail);
+    }
+
+    function updateUsageUI(remaining, limit) {
+      if (!usageCount || !usagePill) return;
+
+      usageCount.textContent = `${remaining}/${limit}`;
+
+      // Update color based on remaining
+      usagePill.classList.remove('border-emerald/20', 'border-gold/20', 'border-coral/20', 'bg-emerald/10', 'bg-gold/10', 'bg-coral/10');
+      usageCount.classList.remove('text-emerald', 'text-gold', 'text-coral');
+
+      if (remaining > 2) {
+        usagePill.classList.add('border-emerald/20', 'bg-emerald/10');
+        usageCount.classList.add('text-emerald');
+      } else if (remaining > 0) {
+        usagePill.classList.add('border-gold/20', 'bg-gold/10');
+        usageCount.classList.add('text-gold');
+      } else {
+        usagePill.classList.add('border-coral/20', 'bg-coral/10');
+        usageCount.classList.add('text-coral');
+      }
+    }
+
+    function checkUsageThresholds(remaining, limit, hasEmail) {
+      // Hide all states first
+      emailCapture?.classList.add('hidden');
+      blockedState?.classList.add('hidden');
+      uploadSection?.classList.remove('hidden');
+
+      if (remaining === 0) {
+        // Blocked - show blocked state
+        blockedState?.classList.remove('hidden');
+        uploadSection?.classList.add('hidden');
+      } else if (!hasEmail && remaining <= 2 && limit === 8) {
+        // Approaching limit without email - show email capture
+        emailCapture?.classList.remove('hidden');
+      }
+    }
+
+    async function captureEmailSubmit(email) {
+      if (!email || !email.includes('@')) {
+        alert('Please enter a valid email address');
+        return false;
+      }
+
+      // Store locally
+      localStorage.setItem(STORAGE_KEYS.EMAIL, email);
+
+      // Send to Formspree (with guard to prevent duplicate submissions)
+      const submissionCount = parseInt(localStorage.getItem(STORAGE_KEYS.EMAIL_SUBMISSIONS) || '0');
+      if (submissionCount < 3 && FORMSPREE_ENDPOINT !== 'https://formspree.io/f/YOUR_FORM_ID') {
+        try {
+          const response = await fetch(FORMSPREE_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              email,
+              source: 'deal-analyzer-unlock',
+              timestamp: new Date().toISOString()
+            })
+          });
+
+          if (response.ok) {
+            localStorage.setItem(STORAGE_KEYS.EMAIL_SUBMISSIONS, String(submissionCount + 1));
+          }
+        } catch (err) {
+          console.warn('Email capture failed:', err);
+          // Still unlock - don't punish user for network issues
+        }
+      }
+
+      // Unlock bonus uses
+      const usage = getUsageState();
+      usage.emailUnlocked = true;
+      usage.remaining = (usage.remaining || 0) + 10;
+      usage.limit = 18;
+      saveUsageState(usage);
+
+      // Update UI
+      updateUsageUI(usage.remaining, usage.limit);
+      emailCapture?.classList.add('hidden');
+
+      return true;
+    }
+
+    function setupEventListeners() {
+
+      uploadZone.addEventListener('click', () => fileInput.click());
+
+      uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+      });
+      uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+      });
+      uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file) handleFile(file);
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handleFile(file);
+      });
+
+      clearFileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        resetUpload();
+      });
+
+      const fields = ['address', 'units', 'askingPrice', 'grossRent', 'propertyTaxes', 'insurance', 'utilities'];
+      fields.forEach(field => {
+        const input = document.getElementById(`field-${field}`);
+        if (input) {
+          input.addEventListener('input', (e) => {
+            propertyData[field] = field === 'address' ? e.target.value : (parseFloat(e.target.value) || 0);
+            saveToLocalStorage();
+            updateMetrics();
+          });
+        }
+      });
+
+      stressToggle.addEventListener('change', (e) => {
+        isStressTest = e.target.checked;
+        updateMetrics();
+      });
+
+      printBtn.addEventListener('click', () => {
+        updatePrintScorecard();
+        window.print();
+      });
+
+      resetAppBtn.addEventListener('click', () => {
+        if (confirm('Clear all property data and start over?')) {
+          localStorage.removeItem(STORAGE_KEYS.PROPERTY_DATA);
+          location.reload();
+        }
+      });
+
+      // Email capture submit
+      captureSubmit?.addEventListener('click', async () => {
+        const email = captureEmail?.value?.trim();
+        captureSubmit.disabled = true;
+        captureSubmit.textContent = 'Unlocking...';
+
+        const success = await captureEmailSubmit(email);
+
+        if (success) {
+          captureSubmit.textContent = 'Unlocked! ✓';
+          setTimeout(() => {
+            captureSubmit.textContent = 'Unlock ✨';
+            captureSubmit.disabled = false;
+          }, 2000);
+        } else {
+          captureSubmit.textContent = 'Unlock ✨';
+          captureSubmit.disabled = false;
+        }
+      });
+
+      // Enter key on email input
+      captureEmail?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          captureSubmit?.click();
+        }
+      });
+    }
+
+
+    async function handleFile(file) {
+      // Visual Compression handles any size (client-side processing)
+      // We just warn if it's exceptionally large to set expectations
+      if (file.size > 50 * 1024 * 1024) {
+        if (!confirm(`This file is large (${formatFileSize(file.size)}). It might take a moment to process. Continue?`)) {
+          resetUpload();
+          return;
+        }
+      }
+
+      const uploadIdle = document.getElementById('upload-idle');
+      const uploadLoading = document.getElementById('upload-loading');
+      const filePreview = document.getElementById('file-preview');
+
+      // Reset previous state
+      if (propertyData) {
+        // preserve logic if needed, but usually we just start over
+      }
+
+      // Check local usage state first
+      const usage = getUsageState();
+      const hasEmail = !!localStorage.getItem(STORAGE_KEYS.EMAIL);
+
+      if (usage.remaining !== undefined && usage.remaining <= 0) {
+        checkUsageThresholds(0, usage.limit || 8, hasEmail);
+        return;
+      }
+
+      uploadIdle.classList.add('hidden');
+      uploadLoading.classList.remove('hidden');
+
+      document.getElementById('preview-name').textContent = file.name;
+      document.getElementById('preview-size').textContent = formatFileSize(file.size);
+      document.getElementById('preview-icon').textContent = file.type.includes('pdf') ? '📄' : '🖼️';
+
+      // Visual Compression happens inside extractPropertyData
+      const result = await extractPropertyData(file);
+
+      uploadLoading.classList.add('hidden');
+      uploadIdle.classList.remove('hidden');
+      // Restore default loading text
+      setTimeout(() => {
+        const loadingText = document.getElementById('loading-text');
+        if (loadingText) loadingText.textContent = 'Analyzing property...';
+      }, 500);
+
+      if (result.success) {
+        // ... (rest of success logic) ...
+        // Update usage from API response
+        const remaining = result.remaining !== undefined ? result.remaining : (usage.remaining - 1);
+        const limit = result.limit || usage.limit || 8;
+        const needsEmail = result.needsEmail;
+
+        const newUsage = { ...usage, remaining, limit, count: (usage.count || 0) + 1 };
+        saveUsageState(newUsage);
+        updateUsageUI(remaining, limit);
+        checkUsageThresholds(remaining, limit, hasEmail);
+
+        propertyData = result.data;
+        estimates = result.estimates || [];
+        saveToLocalStorage();
+        showDataAndMetrics();
+
+      } else if (result.error && result.error.includes('Daily limit')) {
+        const newUsage = { ...usage, remaining: 0 };
+        saveUsageState(newUsage);
+        updateUsageUI(0, result.limit || usage.limit || 8);
+        checkUsageThresholds(0, result.limit || 8, hasEmail);
+      } else {
+        alert('Extraction failed: ' + result.error);
+      }
+    }
+
+    /**
+     * Smart PDF Processing
+     * 1. Extracts full text (cheap)
+     * 2. Selects key pages based on keywords (financials, tables)
+     * 3. Renders only those pages to images
+     */
+    async function processPdfSmart(file) {
+      document.getElementById('loading-text').textContent = 'Scanning document...';
+      await new Promise(r => setTimeout(r, 50));
+
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      const totalPages = pdf.numPages;
+
+      let fullText = '';
+      const pageScores = [];
+
+      // Pass 1: Text Extraction & Page Scoring
+      for (let i = 1; i <= totalPages; i++) {
+        document.getElementById('loading-text').textContent = `Scanning page ${i} of ${totalPages}...`;
+        await new Promise(r => setTimeout(r, 5));
+
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+
+        // Normalize text: remove excessive whitespace and fix tracking (e.g. "I N C O M E" -> "income")
+        const normalizedText = pageText.replace(/\s+/g, ' ').trim();
+        // aggressively remove spaces to catch "N O I" -> "noi" for scoring only
+        const condensedText = normalizedText.replace(/\s/g, '').toLowerCase();
+        const lowerText = normalizedText.toLowerCase();
+
+        fullText += `--- Page ${i} ---\n${normalizedText}\n\n`;
+
+        // Score page for relevance
+        let score = 0;
+
+        // Tier 1: Critical Financial Identifiers (15 pts)
+        if (condensedText.includes('noi') || lowerText.includes('net operating income')) score += 15;
+        if (lowerText.includes('operating statement') || lowerText.includes('income statement')) score += 15;
+
+        // Tier 2: Strong Indicators (10 pts)
+        if (lowerText.includes('rent roll') || lowerText.includes('schedule of rents')) score += 10;
+        if (lowerText.includes('pro forma') || lowerText.includes('proforma')) score += 10;
+        if (lowerText.includes('actual') && lowerText.includes('budget')) score += 10;
+
+        // Tier 3: Context Words (5 pts)
+        if (normalizedText.includes('income') && normalizedText.includes('expense')) score += 5;
+        if (normalizedText.includes('unit mix')) score += 5;
+        if (normalizedText.includes('market rent')) score += 5;
+        if (normalizedText.includes('notes to financials')) score += 5;
+
+        // Tier 4: Line Items (3 pts)
+        if (normalizedText.includes('tax') && normalizedText.includes('insurance')) score += 3;
+        if (normalizedText.includes('utilities') || normalizedText.includes('maintenance')) score += 3;
+
+        // Bonus for dense data tables (lots of numbers aligned)
+        // Look for patterns like $123,456 or 12.3% or columns of numbers
+        const numberCount = (pageText.match(/\$?\d{1,3}(,\d{3})*(\.\d+)?/g) || []).length;
+        if (numberCount > 20) score += 5;
+        if (numberCount > 50) score += 10; // It's likely a spreadsheet
+
+        pageScores.push({ pageIndex: i, score });
+      }
+
+      // Pass 2: Selection
+      const selectedIndices = new Set([1]); // Always Page 1
+
+      // Strategy: Always include the last 2 pages (often Pricing/Financials/Summary)
+      if (totalPages > 1) selectedIndices.add(totalPages);
+      if (totalPages > 2) selectedIndices.add(totalPages - 1);
+
+      // Sort by score descending and fill remaining slots
+      const sortedPages = pageScores.sort((a, b) => b.score - a.score);
+
+      // Take top highest scoring pages until we have 5-6 total
+      for (const p of sortedPages) {
+        if (selectedIndices.size >= 6) break;
+        selectedIndices.add(p.pageIndex);
+      }
+
+      // If document is small (< 5 pages), just take all
+      if (totalPages <= 5) {
+        for (let i = 1; i <= totalPages; i++) selectedIndices.add(i);
+      }
+
+      const pagesToRender = Array.from(selectedIndices).sort((a, b) => a - b);
+      console.log('Smart Selected Pages:', pagesToRender);
+
+      // Pass 3: Render Selected Pages
+      const images = [];
+      for (const pageNum of pagesToRender) {
+        document.getElementById('loading-text').textContent = `Processing key page ${pageNum}...`;
+        await new Promise(r => setTimeout(r, 10));
+
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+        // Medium quality JPEG
+        const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+        images.push(base64);
+      }
+
+      return { images, text: fullText };
+    }
+
+
+    function showDataAndMetrics() {
+      document.getElementById('field-address').value = propertyData.address || '';
+      document.getElementById('field-units').value = propertyData.units || '';
+      document.getElementById('field-askingPrice').value = propertyData.askingPrice || '';
+      document.getElementById('field-grossRent').value = propertyData.grossRent || '';
+      document.getElementById('field-propertyTaxes').value = propertyData.propertyTaxes || '';
+      document.getElementById('field-insurance').value = propertyData.insurance || '';
+      document.getElementById('field-utilities').value = propertyData.utilities || '';
+
+      const allFields = ['units', 'askingPrice', 'grossRent', 'propertyTaxes', 'insurance', 'utilities'];
+      allFields.forEach(field => {
+        const badge = document.getElementById(`badge-${field}`);
+        if (badge) badge.classList.toggle('hidden', !estimates.includes(field));
+      });
+
+      dataSection.classList.remove('hidden');
+      metricsSection.classList.remove('hidden');
+      updateMetrics();
+    }
+
+    function updateMetrics() {
+      const vacancyRate = isStressTest ? 0.10 : 0.05;
+      const metrics = calculateROI(propertyData, { vacancyRate });
+
+      document.getElementById('metric-noi').textContent = formatCurrency(metrics.noi);
+      document.getElementById('metric-caprate').textContent = formatPercent(metrics.capRate);
+      document.getElementById('metric-coc').textContent = formatPercent(metrics.cashOnCash);
+      document.getElementById('metric-maxoffer').textContent = formatCurrency(metrics.maxOffer);
+      document.getElementById('metric-monthly').textContent = formatCurrency(metrics.cashFlow / 12);
+
+      const verdict = metrics.dealVerdict;
+      document.getElementById('verdict-emoji').textContent = verdict.emoji;
+      document.getElementById('verdict-text').textContent = verdict.text;
+      document.getElementById('verdict-text').className = `font-bold text-lg verdict-${verdict.rating}`;
+
+      const subtext = metrics.capRate >= 7
+        ? `At this price, you're getting ${formatPercent(metrics.capRate)} cap rate`
+        : `You need to negotiate down to ${formatCurrency(metrics.maxOffer)} for 7% cap`;
+      document.getElementById('verdict-sub').textContent = subtext;
+    }
+
+    function updatePrintScorecard() {
+      const metrics = calculateROI(propertyData);
+
+      document.getElementById('print-address').textContent = propertyData.address || 'Property Address';
+      document.getElementById('print-date').textContent = `Generated: ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      document.getElementById('print-units').textContent = propertyData.units;
+      document.getElementById('print-price').textContent = formatCurrency(propertyData.askingPrice);
+      document.getElementById('print-rent').textContent = formatCurrency(propertyData.grossRent) + '/mo';
+      document.getElementById('print-taxes').textContent = formatCurrency(propertyData.propertyTaxes);
+      document.getElementById('print-insurance').textContent = formatCurrency(propertyData.insurance);
+      document.getElementById('print-noi').textContent = formatCurrency(metrics.noi);
+      document.getElementById('print-caprate').textContent = formatPercent(metrics.capRate);
+      document.getElementById('print-coc').textContent = formatPercent(metrics.cashOnCash);
+      document.getElementById('print-maxoffer').textContent = formatCurrency(metrics.maxOffer);
+
+      const recommendation = `At the asking price of ${formatCurrency(propertyData.askingPrice)}, this deal yields a ${formatPercent(metrics.capRate)} cap rate. For a 7% cap rate target, offer no more than ${formatCurrency(metrics.maxOffer)}.`;
+      document.getElementById('print-recommendation').textContent = recommendation;
+    }
+
+    function resetUpload() {
+      fileInput.value = '';
+      filePreview.classList.add('hidden');
+      uploadIdle.classList.remove('hidden');
+      uploadLoading.classList.add('hidden');
+    }
+
+    function saveToLocalStorage() {
+      localStorage.setItem(STORAGE_KEYS.PROPERTY_DATA, JSON.stringify({ data: propertyData, estimates }));
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    // Start app when DOM is ready
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+
+</body>
+
+</html>
