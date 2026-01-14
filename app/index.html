@@ -445,8 +445,9 @@
                   <span id="badge-units"
                     class="hidden badge-estimated text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">EST</span>
                 </label>
-                <input type="number" id="field-units" class="field-input w-full px-3 py-2 rounded-lg mt-1 text-white"
-                  min="1">
+                <input type="text" id="field-units"
+                  class="field-input w-full px-3 py-2 rounded-lg mt-1 text-white bg-black/50 cursor-not-allowed"
+                  readonly>
               </div>
               <div>
                 <label class="text-xs text-white/50 uppercase tracking-wider flex items-center gap-2">
@@ -563,6 +564,9 @@
               <p class="text-xs text-white/50 uppercase tracking-wider mb-1">Net Operating Income</p>
               <p id="metric-noi" class="text-2xl font-bold font-mono text-white">$0</p>
               <p class="text-xs text-white/40">Per year</p>
+              <p id="metric-vacancy-assumption" class="text-xs text-white/30 mt-1">Using 5% vacancy</p>
+              <p id="metric-broker-noi" class="text-xs text-white/30 mt-2 hidden">Broker: <span
+                  class="font-mono">$0</span></p>
             </div>
 
             <div class="metric-card rounded-xl p-4">
@@ -708,9 +712,8 @@
     function calculateROI(data, options = {}) {
       const {
         vacancyRate = 0.05,
-        repairsRate = 0.08, // changed to % of Gross Annual Income
-        loanTerms = { down: 0.20, rate: 0.075, years: 30 },
-        useStatedValues = true // Default to trusting broker data
+        repairsRate = 0.08, // 8% of Gross Annual Income (Industry Standard)
+        loanTerms = { down: 0.20, rate: 0.075, years: 30 }
       } = options;
 
       const askingPrice = Number(data.askingPrice) || 0;
@@ -725,15 +728,16 @@
 
       const operatingExpenses = propertyTaxes + insurance + utilities;
 
-      // FIX: Use % of Gross Income for repairs (Industry Standard) instead of % of Price
-      // Large deals (> $10M) were breaking with 2% of Price ($200k vs $950k)
+      // Use % of Gross Income for repairs (Industry Standard)
       const repairs = grossAnnual * repairsRate;
 
       const expensesCalculated = operatingExpenses + repairs;
       const noiCalculated = effectiveGrossIncome - expensesCalculated;
 
-      // Use extracted NOI if available AND we are not stress testing (calculated mode forces our standards)
-      const noi = (useStatedValues && Number(data.noi) > 0) ? Number(data.noi) : noiCalculated;
+      // PHASE 1 FIX: Always use calculated NOI for transparent, responsive math
+      // Keep broker's stated NOI as reference metadata only
+      const noi = noiCalculated;
+      const brokerNoi = Number(data.noi) || 0;
 
       const capRate = askingPrice > 0 ? (noi / askingPrice) * 100 : 0;
       const maxOffer = noi > 0 ? noi / 0.07 : 0;
@@ -753,8 +757,16 @@
       const cashOnCash = downPayment > 0 ? (cashFlow / downPayment) * 100 : 0;
 
       return {
-        noi, capRate, maxOffer, downPayment, loanAmount,
-        monthlyPayment, annualDebtService, cashFlow, cashOnCash,
+        noi,
+        brokerNoi, // Reference value for comparison
+        capRate,
+        maxOffer,
+        downPayment,
+        loanAmount,
+        monthlyPayment,
+        annualDebtService,
+        cashFlow,
+        cashOnCash,
         dealVerdict: getDealVerdict(capRate, cashOnCash)
       };
     }
@@ -1062,7 +1074,7 @@
         resetUpload();
       });
 
-      const fields = ['address', 'units', 'askingPrice', 'grossRent', 'propertyTaxes', 'insurance', 'utilities'];
+      const fields = ['address', 'askingPrice', 'grossRent', 'propertyTaxes', 'insurance', 'utilities'];
       fields.forEach(field => {
         const input = document.getElementById(`field-${field}`);
         if (input) {
@@ -1328,14 +1340,42 @@
 
     function updateMetrics() {
       const vacancyRate = isStressTest ? 0.10 : 0.05;
-      const useStatedValues = !isStressTest; // If stress testing, force calculated values (ignore broker NOI)
-      const metrics = calculateROI(propertyData, { vacancyRate, useStatedValues });
+      const metrics = calculateROI(propertyData, { vacancyRate });
 
       document.getElementById('metric-noi').textContent = formatCurrency(metrics.noi);
       document.getElementById('metric-caprate').textContent = formatPercent(metrics.capRate);
       document.getElementById('metric-coc').textContent = formatPercent(metrics.cashOnCash);
       document.getElementById('metric-maxoffer').textContent = formatCurrency(metrics.maxOffer);
       document.getElementById('metric-monthly').textContent = formatCurrency(metrics.cashFlow / 12);
+
+      // Update vacancy assumption indicator
+      const vacancyElement = document.getElementById('metric-vacancy-assumption');
+      if (isStressTest) {
+        vacancyElement.textContent = 'Using 10% vacancy (Stress Test)';
+        vacancyElement.classList.remove('text-white/30');
+        vacancyElement.classList.add('text-amber-400/70');
+      } else {
+        vacancyElement.textContent = 'Using 5% vacancy';
+        vacancyElement.classList.remove('text-amber-400/70');
+        vacancyElement.classList.add('text-white/30');
+      }
+
+      // Show broker NOI reference if it exists and differs from calculated
+      const brokerNoiElement = document.getElementById('metric-broker-noi');
+      if (metrics.brokerNoi > 0 && Math.abs(metrics.brokerNoi - metrics.noi) > 100) {
+        brokerNoiElement.classList.remove('hidden');
+        const brokerSpan = brokerNoiElement.querySelector('span');
+        brokerSpan.textContent = formatCurrency(metrics.brokerNoi);
+
+        // Always show in amber - it's a reference/warning value
+        brokerNoiElement.classList.add('text-amber-400/60');
+        brokerNoiElement.classList.remove('text-white/30');
+      } else {
+        brokerNoiElement.classList.add('hidden');
+        // Reset color when hidden
+        brokerNoiElement.classList.remove('text-amber-400/60');
+        brokerNoiElement.classList.add('text-white/30');
+      }
 
       const verdict = metrics.dealVerdict;
       document.getElementById('verdict-emoji').textContent = verdict.emoji;
