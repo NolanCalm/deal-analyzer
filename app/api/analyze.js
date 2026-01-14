@@ -22,6 +22,51 @@ const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024; // 5MB base64
 // Use /tmp for Vercel serverless (persists during warm starts)
 const USAGE_FILE = path.join('/tmp', 'rate-limit-usage.json');
 
+// ==========================================
+// TEXT CONTEXT FALLBACKS (Investor-First)
+// ==========================================
+
+function parseMoney(value) {
+    if (typeof value !== 'string') return 0;
+    const cleaned = value.replace(/[^0-9.\-]/g, '');
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : 0;
+}
+
+function ensureStringArray(value) {
+    if (!Array.isArray(value)) return [];
+    return value.filter(v => typeof v === 'string');
+}
+
+function deriveGrossRentFromTextContext(textContext) {
+    if (typeof textContext !== 'string' || textContext.trim().length === 0) return null;
+
+    // Unit-mix "Total" rows often appear as:
+    // "Total 51 835 SF $1,966 $2.35"  (units, avg size, avg rent, rent psf)
+    const totalRowRegex = /Total\s+(\d{1,5})\s+\d{1,5}\s*SF\s*\$?\s*([0-9]{1,3}(?:,[0-9]{3})*)(?:\.[0-9]{1,2})?\s+\$?\s*\d+(?:\.\d+)?/gi;
+
+    let match;
+    let sumUnits = 0;
+    let sumGrossRent = 0;
+
+    while ((match = totalRowRegex.exec(textContext)) !== null) {
+        const units = Number(match[1]);
+        const avgRent = parseMoney(match[2]);
+
+        if (!Number.isFinite(units) || units <= 0) continue;
+        if (!Number.isFinite(avgRent) || avgRent <= 0) continue;
+
+        // Guardrails: avg rent from unit-mix should be a realistic monthly per-unit figure.
+        if (avgRent < 250 || avgRent > 20000) continue;
+
+        sumUnits += units;
+        sumGrossRent += units * avgRent;
+    }
+
+    if (sumUnits <= 0 || sumGrossRent <= 0) return null;
+    return { grossRent: sumGrossRent, units: sumUnits };
+}
+
 function loadUsageData() {
     try {
         if (fs.existsSync(USAGE_FILE)) {
@@ -331,6 +376,30 @@ export default async function handler(req, res) {
             console.error('[Backend] Full response:', textContent);
             const snippet = textContent.substring(0, 300);
             throw new Error(`Could not parse JSON from AI response. AI returned: "${snippet}..."`);
+        }
+
+        // Investor-first sanity: If Gemini misreads unit-mix rent (common OCR/table issue),
+        // override an implausible grossRent with a deterministic parse from textContext.
+        const derivedRent = deriveGrossRentFromTextContext(textContext);
+        if (derivedRent) {
+            const aiUnits = Number(propertyData.units) || 0;
+            const aiGrossRent = Number(propertyData.grossRent) || 0;
+            const aiPerUnit = aiUnits > 0 ? (aiGrossRent / aiUnits) : 0;
+
+            const derivedUnits = derivedRent.units;
+            const derivedPerUnit = derivedUnits > 0 ? (derivedRent.grossRent / derivedUnits) : 0;
+
+            const aiLooksImplausible = aiGrossRent <= 0 || (aiUnits > 0 && aiPerUnit < 300);
+            const derivedLooksPlausible = derivedPerUnit >= 500;
+
+            if (aiLooksImplausible && derivedLooksPlausible) {
+                propertyData.grossRent = derivedRent.grossRent;
+                propertyData.estimates = ensureStringArray(propertyData.estimates);
+                if (!propertyData.estimates.includes('grossRent')) {
+                    propertyData.estimates.push('grossRent');
+                }
+                console.log(`[Backend] Overrode grossRent with unit-mix total: ${derivedRent.grossRent} (units=${derivedUnits})`);
+            }
         }
 
         return res.status(200).json({
