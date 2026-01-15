@@ -971,11 +971,24 @@
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Ensure unlock cookie is sent
+        credentials: 'include',
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
+      // Vercel 413 (Payload Too Large) is often text/html, not JSON
+      if (response.status === 413) {
+        throw new Error('Payload Too Large');
+      }
+
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // Handle non-JSON errors (e.g. Vercel platform 504, 500, 429)
+        const textText = await response.text();
+        data = { error: textText || `Request failed with status ${response.status}` };
+      }
 
       // Handle rate limit response
       if (response.status === 429) {
@@ -988,10 +1001,6 @@
           limit: data.limit,
           needsEmail: data.needsEmail
         };
-      }
-
-      if (response.status === 413) {
-        throw new Error('Payload Too Large');
       }
 
       if (!response.ok) {
