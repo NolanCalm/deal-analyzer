@@ -1,25 +1,28 @@
 /**
  * api/analyze.js - Vercel Serverless Function
  * Securely handles Gemini API calls using server-side API key
- * Includes durable rate limiting via Redis (ioredis)
+ * Includes durable rate limiting via Upstash Redis (HTTP)
  */
 
-import Redis from 'ioredis';
+import { Redis } from '@upstash/redis';
 
-// Initialize Redis from REDIS_URL
+// Initialize Redis from REDIS_URL (converting TCP -> HTTP)
 let redis;
 try {
     if (process.env.REDIS_URL) {
-        redis = new Redis(process.env.REDIS_URL, {
-            // Check if we need TLS options for your specific provider
-            // Usually proper REDIS_URL handles it (rediss://)
-            tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined
-        });
+        // Parse "rediss://default:TOKEN@host:port"
+        const urlObj = new URL(process.env.REDIS_URL);
 
-        // Handle connection errors preventing crash
-        redis.on('error', (err) => {
-            console.warn('[Redis] Connection error:', err.message);
+        // Construct standard Upstash REST URL: "https://<host>"
+        const baseUrl = `https://${urlObj.hostname}`;
+        const token = urlObj.password;
+
+        redis = new Redis({
+            url: baseUrl,
+            token: token
         });
+    } else if (process.env.UPSTASH_REDIS_REST_URL) {
+        redis = Redis.fromEnv();
     }
 } catch (e) {
     console.warn('[Redis] Could not initialize:', e.message);
