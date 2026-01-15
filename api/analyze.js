@@ -1,10 +1,31 @@
 /**
  * api/analyze.js - Vercel Serverless Function
  * Securely handles Gemini API calls using server-side API key
- * Includes durable rate limiting via Vercel KV and input validation
+ * Includes durable rate limiting via Upstash Redis and input validation
  */
 
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
+
+// Initialize Redis - supports both REST format and REDIS_URL
+let redis;
+try {
+    // Try standard Upstash env vars first
+    if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+        redis = Redis.fromEnv();
+    }
+    // Fall back to REDIS_URL (parse connection string)
+    else if (process.env.REDIS_URL) {
+        // REDIS_URL format: rediss://default:TOKEN@HOST:PORT
+        // REST URL format: https://HOST
+        const url = new URL(process.env.REDIS_URL);
+        const restUrl = `https://${url.hostname}`;
+        const token = url.password;
+        redis = new Redis({ url: restUrl, token });
+        console.log('[Redis] Initialized from REDIS_URL');
+    }
+} catch (e) {
+    console.warn('[Redis] Could not initialize:', e.message);
+}
 
 // ==========================================
 // CONFIGURATION
@@ -37,16 +58,22 @@ function getDailyKey(identifier) {
 }
 
 async function checkDailyLimit(ip, unlockToken) {
+    // If Redis not available, fail open
+    if (!redis) {
+        console.warn('[Rate Limit] Redis not initialized, allowing request');
+        return { allowed: true, remaining: 1, limit: LIMITS.FREE_TIER, needsEmail: true };
+    }
+
     // Determine if user is unlocked
     let isUnlocked = false;
     let identifier = ip;
 
     if (unlockToken) {
-        // Check if unlock token is valid in KV
-        const tokenData = await kv.get(`unlock:${unlockToken}`);
+        // Check if unlock token is valid in Redis
+        const tokenData = await redis.get(`unlock:${unlockToken}`);
         if (tokenData) {
             isUnlocked = true;
-            identifier = `unlocked:${unlockToken.substring(0, 16)}`; // Use token prefix as identifier
+            identifier = `unlocked:${unlockToken.substring(0, 16)}`;
         }
     }
 
@@ -54,12 +81,12 @@ async function checkDailyLimit(ip, unlockToken) {
     const key = getDailyKey(identifier);
 
     try {
-        // Use atomic increment - if key doesn't exist, starts at 0
-        const count = await kv.incr(key);
+        // Use atomic increment
+        const count = await redis.incr(key);
 
         // Set expiry on first use (86400 seconds = 24 hours)
         if (count === 1) {
-            await kv.expire(key, 86400);
+            await redis.expire(key, 86400);
         }
 
         console.log(`[Rate Limit] Key: ${key}, Count: ${count}, Limit: ${limit}, Unlocked: ${isUnlocked}`);
@@ -80,8 +107,7 @@ async function checkDailyLimit(ip, unlockToken) {
             needsEmail: !isUnlocked && count >= LIMITS.FREE_TIER
         };
     } catch (error) {
-        console.error('[Rate Limit] KV error, falling back to allow:', error.message);
-        // Fail open - if KV is down, allow the request but log it
+        console.error('[Rate Limit] Redis error, falling back to allow:', error.message);
         return { allowed: true, remaining: 1, limit, needsEmail: !isUnlocked };
     }
 }

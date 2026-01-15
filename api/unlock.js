@@ -1,10 +1,26 @@
 /**
  * api/unlock.js - Email Unlock Endpoint
- * Handles email capture, creates unlock tokens, and stores in KV
+ * Handles email capture, creates unlock tokens, and stores in Redis
  */
 
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 import crypto from 'crypto';
+
+// Initialize Redis - supports both REST format and REDIS_URL
+let redis;
+try {
+    if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+        redis = Redis.fromEnv();
+    } else if (process.env.REDIS_URL) {
+        const url = new URL(process.env.REDIS_URL);
+        const restUrl = `https://${url.hostname}`;
+        const token = url.password;
+        redis = new Redis({ url: restUrl, token });
+        console.log('[Redis] Initialized from REDIS_URL');
+    }
+} catch (e) {
+    console.warn('[Redis] Could not initialize:', e.message);
+}
 
 // Formspree endpoint - Replace with your actual form ID
 const FORMSPREE_ENDPOINT = process.env.FORMSPREE_URL || 'https://formspree.io/f/YOUR_FORM_ID';
@@ -43,12 +59,15 @@ export default async function handler(req, res) {
         // Generate a secure unlock token
         const unlockToken = crypto.randomBytes(32).toString('hex');
 
-        // Store unlock token in KV with TTL
+        // Store unlock token in Redis with TTL
         // Key: unlock:<token> -> { email, createdAt }
-        await kv.set(`unlock:${unlockToken}`, {
+        if (!redis) {
+            throw new Error('Redis not initialized');
+        }
+        await redis.set(`unlock:${unlockToken}`, JSON.stringify({
             email: sanitizedEmail,
             createdAt: new Date().toISOString()
-        }, { ex: TOKEN_TTL_SECONDS });
+        }), { ex: TOKEN_TTL_SECONDS });
 
         // Submit to Formspree (server-side, so no client exposure)
         if (FORMSPREE_ENDPOINT && !FORMSPREE_ENDPOINT.includes('YOUR_FORM_ID')) {
