@@ -302,6 +302,96 @@
     .print-only {
       display: none;
     }
+
+    /* Error Toast */
+    .error-toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border: 1px solid var(--coral);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      box-shadow: 0 8px 32px rgba(233, 69, 96, 0.3);
+      z-index: 1000;
+      animation: slideUp 0.3s ease-out;
+      max-width: 90vw;
+    }
+
+    .error-toast.hidden {
+      display: none;
+    }
+
+    .error-toast-content {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .error-icon {
+      font-size: 1.5rem;
+    }
+
+    .error-message {
+      flex: 1;
+    }
+
+    .error-message strong {
+      color: var(--coral);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    .error-message p {
+      color: var(--ivory);
+      opacity: 0.7;
+      font-size: 0.875rem;
+      margin: 0;
+    }
+
+    .retry-btn {
+      background: var(--coral);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .retry-btn:hover {
+      background: #ff6b6b;
+      transform: scale(1.02);
+    }
+
+    .dismiss-btn {
+      background: transparent;
+      border: none;
+      color: var(--ivory);
+      opacity: 0.5;
+      font-size: 1.25rem;
+      cursor: pointer;
+      padding: 0.25rem;
+      transition: opacity 0.2s;
+    }
+
+    .dismiss-btn:hover {
+      opacity: 1;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateX(-50%) translateY(100%);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+    }
   </style>
 </head>
 
@@ -338,6 +428,19 @@
 
     </div>
   </header>
+
+  <!-- Error Toast -->
+  <div id="error-toast" class="error-toast hidden">
+    <div class="error-toast-content">
+      <span class="error-icon">⚠️</span>
+      <div class="error-message">
+        <strong id="error-title">Oops!</strong>
+        <p id="error-detail">Something went wrong.</p>
+      </div>
+      <button id="error-retry" class="retry-btn">Try Again</button>
+      <button id="error-dismiss" class="dismiss-btn">×</button>
+    </div>
+  </div>
 
   <!-- Main App -->
   <main class="max-w-6xl mx-auto px-4 py-8">
@@ -892,6 +995,70 @@
     const stressToggle = document.getElementById('stress-toggle');
     const printBtn = document.getElementById('print-btn');
 
+    // Error Toast elements
+    const errorToast = document.getElementById('error-toast');
+    const errorRetryBtn = document.getElementById('error-retry');
+    const errorDismissBtn = document.getElementById('error-dismiss');
+
+    // Error type messages for user-friendly display
+    const ERROR_MESSAGES = {
+      RATE_LIMIT: {
+        title: 'AI is busy',
+        detail: 'Too many requests. Please wait a moment and try again.',
+        canRetry: true
+      },
+      SERVER_ERROR: {
+        title: 'Server hiccup',
+        detail: 'Our AI service is temporarily unavailable. Try again in a minute.',
+        canRetry: true
+      },
+      API_ERROR: {
+        title: 'Analysis failed',
+        detail: 'Could not extract data from this document. Try a clearer image.',
+        canRetry: false
+      },
+      DAILY_LIMIT: {
+        title: 'Daily limit reached',
+        detail: 'You\'ve used all free analyses. Unlock more with your email.',
+        canRetry: false
+      }
+    };
+
+    let pendingFile = null; // Track file for retry
+    let errorToastTimeout = null;
+
+    function showErrorToast(errorType, rawError) {
+      const config = ERROR_MESSAGES[errorType] || ERROR_MESSAGES.API_ERROR;
+
+      document.getElementById('error-title').textContent = config.title;
+      document.getElementById('error-detail').textContent = config.detail;
+      errorRetryBtn.style.display = config.canRetry ? 'block' : 'none';
+      errorToast.classList.remove('hidden');
+
+      // Clear existing timeout
+      if (errorToastTimeout) clearTimeout(errorToastTimeout);
+
+      // Auto-dismiss after 10 seconds
+      errorToastTimeout = setTimeout(() => dismissErrorToast(), 10000);
+    }
+
+    function dismissErrorToast() {
+      errorToast.classList.add('hidden');
+      if (errorToastTimeout) {
+        clearTimeout(errorToastTimeout);
+        errorToastTimeout = null;
+      }
+    }
+
+    function getErrorType(error) {
+      if (!error) return 'API_ERROR';
+      const errorStr = String(error).toLowerCase();
+      if (errorStr.includes('daily limit') || errorStr.includes('rate limit')) return 'DAILY_LIMIT';
+      if (errorStr.includes('429') || errorStr.includes('resource exhausted') || errorStr.includes('too many')) return 'RATE_LIMIT';
+      if (errorStr.includes('500') || errorStr.includes('503') || errorStr.includes('unavailable')) return 'SERVER_ERROR';
+      return 'API_ERROR';
+    }
+
     // Initialize
     function init() {
       // Cleanup old API keys from previous architecture
@@ -1117,10 +1284,22 @@
           captureSubmit?.click();
         }
       });
+
+      // Error toast buttons
+      errorDismissBtn?.addEventListener('click', dismissErrorToast);
+      errorRetryBtn?.addEventListener('click', () => {
+        dismissErrorToast();
+        if (pendingFile) {
+          handleFile(pendingFile);
+        }
+      });
     }
 
 
     async function handleFile(file) {
+      // Store file for potential retry
+      pendingFile = file;
+
       // Visual Compression handles any size (client-side processing)
       // We just warn if it's exceptionally large to set expectations
       if (file.size > 50 * 1024 * 1024) {
@@ -1188,8 +1367,10 @@
         saveUsageState(newUsage);
         updateUsageUI(0, result.limit || usage.limit || 8);
         checkUsageThresholds(0, result.limit || 8, hasEmail);
+        showErrorToast('DAILY_LIMIT', result.error);
       } else {
-        alert('Extraction failed: ' + result.error);
+        const errorType = getErrorType(result.error);
+        showErrorToast(errorType, result.error);
       }
     }
 
