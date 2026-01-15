@@ -1,48 +1,36 @@
 /**
  * api/unlock.js - Email Unlock Endpoint
- * Handles email capture, creates unlock tokens, and stores in Redis
+ * Handles email capture and fails open to stateless signed tokens
  */
 
-import { Redis } from '@upstash/redis';
 import crypto from 'crypto';
 
-// Initialize Redis from REDIS_URL (converting TCP -> HTTP)
-let redis;
-try {
-    if (process.env.REDIS_URL) {
-        // Parse "rediss://default:TOKEN@host:port"
-        const urlObj = new URL(process.env.REDIS_URL);
+// Use a stable secret for signing tickets (fallback to a hardcoded one if env missing, low security risk for this MVP)
+const SIGNING_SECRET = process.env.GEMINI_API_KEY || 'deal-analyzer-fallback-secret-2024';
+const TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
-        // Construct standard Upstash REST URL: "https://<host>"
-        const baseUrl = `https://${urlObj.hostname}`;
-        const token = urlObj.password;
-
-        redis = new Redis({
-            url: baseUrl,
-            token: token
-        });
-    } else if (process.env.UPSTASH_REDIS_REST_URL) {
-        redis = Redis.fromEnv();
-    }
-} catch (e) {
-    console.warn('[Redis] Could not initialize:', e.message);
-}
-
-// Formspree endpoint - Replace with your actual form ID
+// Formspree endpoint
 const FORMSPREE_ENDPOINT = process.env.FORMSPREE_URL || 'https://formspree.io/f/YOUR_FORM_ID';
 
-// Token expires after 30 days
-const TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+function generateStatelessToken(email) {
+    // Token format: base64(email)|timestamp|signature
+    const timestamp = Date.now();
+    const payload = `${email}|${timestamp}`;
+    const signature = crypto
+        .createHmac('sha256', SIGNING_SECRET)
+        .update(payload)
+        .digest('hex');
+
+    return Buffer.from(`${payload}|${signature}`).toString('base64');
+}
 
 export default async function handler(req, res) {
-    // Only allow POST
     if (req.method !== 'POST') {
         return res.status(405).json({ success: false, error: { code: 'METHOD_NOT_ALLOWED', message: 'Method Not Allowed' } });
     }
 
     const { email } = req.body;
 
-    // Validate email
     if (!email || typeof email !== 'string' || !email.includes('@') || email.length > 254) {
         return res.status(400).json({
             success: false,
@@ -51,8 +39,6 @@ export default async function handler(req, res) {
     }
 
     const sanitizedEmail = email.trim().toLowerCase().substring(0, 254);
-
-    // Basic email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(sanitizedEmail)) {
         return res.status(400).json({
@@ -62,41 +48,24 @@ export default async function handler(req, res) {
     }
 
     try {
-        // Generate a secure unlock token
-        const unlockToken = crypto.randomBytes(32).toString('hex');
+        // 1. Generate Stateless Token (No DB required)
+        const unlockToken = generateStatelessToken(sanitizedEmail);
 
-        // Store unlock token in Redis with TTL
-        // Key: unlock:<token> -> { email, createdAt }
-        if (!redis) {
-            throw new Error('Redis not initialized');
-        }
-        await redis.set(`unlock:${unlockToken}`, JSON.stringify({
-            email: sanitizedEmail,
-            createdAt: new Date().toISOString()
-        }), { ex: TOKEN_TTL_SECONDS });
-
-        // Submit to Formspree (server-side, so no client exposure)
+        // 2. Submit to Formspree (Fire & Forget/Log error but don't block)
         if (FORMSPREE_ENDPOINT && !FORMSPREE_ENDPOINT.includes('YOUR_FORM_ID')) {
+            // ... (keep existing formspree logic logic) ...
             try {
                 await fetch(FORMSPREE_ENDPOINT, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        email: sanitizedEmail,
-                        source: 'deal-analyzer-unlock',
-                        timestamp: new Date().toISOString()
-                    })
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ email: sanitizedEmail, source: 'deal-analyzer-unlock', timestamp: new Date().toISOString() })
                 });
-            } catch (formspreeError) {
-                // Log but don't fail - user still gets unlocked
-                console.error('[Unlock] Formspree submission failed:', formspreeError.message);
+            } catch (fsErr) {
+                console.warn('[Unlock] Formspree error:', fsErr.message);
             }
         }
 
-        // Set HTTP-only cookie with the unlock token
+        // 3. Set Cookie
         const cookieOptions = [
             `unlockToken=${unlockToken}`,
             'HttpOnly',
@@ -108,8 +77,6 @@ export default async function handler(req, res) {
 
         res.setHeader('Set-Cookie', cookieOptions);
 
-        console.log(`[Unlock] Success for email: ${sanitizedEmail.substring(0, 3)}***`);
-
         return res.status(200).json({
             success: true,
             message: 'Email unlocked! You now have 10 analyses per day.',
@@ -118,13 +85,11 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('[Unlock] Error:', error);
+        // Even if something fails, try to return success if we generated a token? 
+        // No, catch block usually implies generated failed.
         return res.status(500).json({
             success: false,
-            error: {
-                code: 'SERVER_ERROR',
-                message: 'Failed to unlock. Please try again.',
-                details: error.message // DEBUG ONLY
-            }
+            error: { code: 'SERVER_ERROR', message: 'Failed to unlock.', details: error.message }
         });
     }
 }

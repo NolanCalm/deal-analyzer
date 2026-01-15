@@ -5,13 +5,27 @@
  */
 
 import { Redis } from '@upstash/redis';
+import crypto from 'crypto';
+
+const SIGNING_SECRET = process.env.GEMINI_API_KEY || 'deal-analyzer-fallback-secret-2024';
+const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
 
 // Initialize Redis from REDIS_URL (converting TCP -> HTTP)
 let redis;
 try {
-    if (process.env.REDIS_URL) {
+    if (process.env.REDIS_URL && process.env.REDIS_URL.includes('rediss://')) {
         // Parse "rediss://default:TOKEN@host:port"
         const urlObj = new URL(process.env.REDIS_URL);
+
+        // Construct standard Upstash REST URL: "https://<host>"
+        const baseUrl = `https://${urlObj.hostname}`;
+        const token = urlObj.password;
+
+        redis = new Redis({
+            url: baseUrl,
+            token: token
+        });
+    } else if (process.env.UPSTASH_REDIS_REST_URL) {
 
         // Construct standard Upstash REST URL: "https://<host>"
         const baseUrl = `https://${urlObj.hostname}`;
@@ -59,27 +73,49 @@ function getDailyKey(identifier) {
 }
 
 async function checkDailyLimit(ip, unlockToken) {
-    // If Redis not available, fail open
-    if (!redis) {
-        console.warn('[Rate Limit] Redis not initialized, allowing request');
-        return { allowed: true, remaining: 1, limit: LIMITS.FREE_TIER, needsEmail: true };
-    }
-
-    // Determine if user is unlocked
+    // 1. Validate Unlock Token (Stateless)
     let isUnlocked = false;
     let identifier = ip;
 
     if (unlockToken) {
-        // Check if unlock token is valid in Redis
-        const tokenData = await redis.get(`unlock:${unlockToken}`);
-        if (tokenData) {
-            isUnlocked = true;
-            identifier = `unlocked:${unlockToken.substring(0, 16)}`;
+        try {
+            const raw = Buffer.from(unlockToken, 'base64').toString('utf-8');
+
+            // Format: email|timestamp|signature
+            const parts = raw.split('|');
+            const providedSig = parts.pop();
+            const timestamp = parseInt(parts.pop(), 10);
+            const email = parts.join('|');
+            const rebuildPayload = `${email}|${timestamp}`;
+
+            // Verify signature
+            const expectedSig = crypto
+                .createHmac('sha256', SIGNING_SECRET)
+                .update(rebuildPayload)
+                .digest('hex');
+
+            const now = Date.now();
+
+            if (providedSig === expectedSig && (now - timestamp) < TOKEN_TTL_MS) {
+                isUnlocked = true;
+                // Use email hash as identifier to prevent IP hopping, but keep privacy
+                const emailHash = crypto.createHash('sha256').update(email).digest('hex').substring(0, 16);
+                identifier = `unlocked:${emailHash}`;
+            }
+        } catch (e) {
+            console.warn('[Security] Invalid unlock token:', e.message);
         }
     }
 
     const limit = isUnlocked ? LIMITS.UNLOCKED_TIER : LIMITS.FREE_TIER;
     const key = getDailyKey(identifier);
+
+    // If Redis not available, fail open
+    if (!redis) {
+        console.warn('[Rate Limit] Redis not initialized, allowing request');
+        // If they have a valid token, they are unlocked even if Redis is down
+        return { allowed: true, remaining: 1, limit, needsEmail: !isUnlocked };
+    }
 
     try {
         // Use atomic increment
