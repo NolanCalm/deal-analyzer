@@ -1488,9 +1488,10 @@
       // Sort by score descending and fill remaining slots
       const sortedPages = pageScores.sort((a, b) => b.score - a.score);
 
-      // Take top highest scoring pages until we have 4 total (to stay under Vercel 4.5MB limit)
+      // Reverted to 1.5x scale per user request.
+      // MUST limit to 3 pages max to stay under Vercel 4.5MB payload limit with high-res images.
       for (const p of sortedPages) {
-        if (selectedIndices.size >= 4) break;
+        if (selectedIndices.size >= 3) break;
         selectedIndices.add(p.pageIndex);
       }
 
@@ -1509,7 +1510,7 @@
         await new Promise(r => setTimeout(r, 10));
 
         const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.0 }); // Reduced from 1.5 to fit payload limits
+        const viewport = page.getViewport({ scale: 1.5 }); // Reverted to 1.5x for readability
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
