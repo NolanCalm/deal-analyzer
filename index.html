@@ -250,8 +250,11 @@
       body {
         background: white !important;
         color: black !important;
-        font-size: 12pt;
+        font-size: 11pt;
+        /* Slightly smaller for single page */
         font-family: 'Newsreader', Georgia, serif !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
 
       body::before {
@@ -277,11 +280,41 @@
       }
 
       .printable-scorecard {
-        position: absolute;
-        top: 0;
-        left: 0;
+        position: relative;
+        /* Changed from absolute to flow better */
         width: 100%;
-        padding: 20px;
+        padding: 0;
+        page-break-inside: avoid;
+      }
+
+      /* Hide print button wrapper */
+      #print-btn {
+        display: none !important;
+      }
+
+      /* Table compacting */
+      td {
+        padding-top: 2px !important;
+        padding-bottom: 2px !important;
+      }
+
+      h1 {
+        font-size: 1.5rem !important;
+        margin-bottom: 0.5rem !important;
+      }
+
+      h2 {
+        font-size: 1.1rem !important;
+        margin-bottom: 0.5rem !important;
+        margin-top: 1rem !important;
+      }
+
+      .p-8 {
+        padding: 1.5rem !important;
+      }
+
+      .gap-8 {
+        gap: 1rem !important;
       }
 
       /* Print footer styling */
@@ -503,7 +536,7 @@
               Unlock ✨
             </button>
           </div>
-          <p class="text-xs text-ivory/30 mt-2">Join 47+ investors using this tool. No spam, unsubscribe anytime.</p>
+          <p class="text-xs text-ivory/30 mt-2">Email used only for your account. No spam.</p>
         </div>
 
         <!-- Blocked State (shows when daily limit reached) -->
@@ -517,7 +550,7 @@
             class="mt-6 p-4 rounded-xl bg-gradient-to-r from-emerald/10 to-transparent border border-emerald/20 max-w-sm mx-auto">
             <p class="text-emerald font-bold">🚀 Need unlimited analyses?</p>
             <p class="text-ivory/60 text-sm mt-1">Pro tier launching soon. Get early access.</p>
-            <a href="mailto:hello@dealanalyzer.com?subject=Pro%20Access%20Interest"
+            <a href="mailto:nolancalm@gmail.com?subject=Pro%20Access%20Interest&body=Hi%20Nolan,%0A%0AI'm%20interested%20in%20unlimited%20access%20to%20the%20Property%20Deal%20Analyzer."
               class="inline-block mt-3 px-4 py-2 rounded-lg bg-emerald text-surface-950 font-bold text-sm hover:bg-emerald/90 transition-colors">
               Request Pro Access →
             </a>
@@ -1064,7 +1097,8 @@
       localStorage.removeItem('gemini_api_key');
 
       // Set status to ready (using server-side API)
-      apiStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald"></span><span class="text-ivory/50 font-serif">AI Ready</span>';
+      // Status update removed (UX correction)
+      // apiStatus.innerHTML = '';
 
       // Initialize usage tracking
       initUsageState();
@@ -1532,7 +1566,23 @@
     }
 
     function updatePrintScorecard() {
-      const metrics = calculateROI(propertyData);
+      // Respect Stress Test Toggle
+      const isStressed = document.getElementById('stress-toggle')?.checked;
+
+      const options = isStressed ? {
+        vacancyRate: 0.10, // 10%
+        repairsRate: 0.10, // 10%
+        loanTerms: { down: 0.20, rate: 0.095, years: 30 }, // 9.5% rate
+        useStatedValues: false // Force calculation
+      } : {}; // Defaults (5% vacancy, 7.5% rate)
+
+      const metrics = calculateROI(propertyData, options);
+
+      // Add Stress Test indicator to title if active
+      const titleEl = document.querySelector('#printable-scorecard h1');
+      if (titleEl) {
+        titleEl.innerHTML = isStressed ? 'PROPERTY DEAL SCORECARD <span style="font-size: 0.8em; color: #dc2626;">(STRESS TEST)</span>' : 'PROPERTY DEAL SCORECARD';
+      }
 
       document.getElementById('print-address').textContent = propertyData.address || 'Property Address';
       document.getElementById('print-date').textContent = `Generated: ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
