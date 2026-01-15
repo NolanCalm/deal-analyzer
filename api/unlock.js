@@ -11,7 +11,9 @@ let redis;
 try {
     if (process.env.REDIS_URL) {
         redis = new Redis(process.env.REDIS_URL, {
-            tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined
+            family: 4, // Force IPv4
+            tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+            connectTimeout: 10000
         });
 
         redis.on('error', (err) => {
@@ -114,7 +116,11 @@ export default async function handler(req, res) {
         console.error('[Unlock] Error:', error);
         return res.status(500).json({
             success: false,
-            error: { code: 'SERVER_ERROR', message: 'Failed to unlock. Please try again.' }
+            error: {
+                code: 'SERVER_ERROR',
+                message: 'Failed to unlock. Please try again.',
+                details: error.message // DEBUG ONLY
+            }
         });
     }
 }
