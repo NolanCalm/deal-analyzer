@@ -892,11 +892,10 @@
  */
     async function extractPropertyData(file) {
       const mimeType = file.type || 'image/jpeg';
-      const emailUnlocked = !!localStorage.getItem(STORAGE_KEYS.EMAIL);
+      // NOTE: emailUnlocked is now handled server-side via cookies
 
       let payload = {
-        mimeType: mimeType,
-        emailUnlocked: emailUnlocked
+        mimeType: mimeType
       };
 
       try {
@@ -966,8 +965,8 @@
       EMAIL_SUBMISSIONS: 'email_submissions'
     };
 
-    // Formspree endpoint - Replace YOUR_FORM_ID with your actual Formspree form ID
-    const FORMSPREE_ENDPOINT = 'https://formspree.io/f/YOUR_FORM_ID';
+    // Server-side unlock endpoint (handles email capture and cookie-based tokens)
+    const UNLOCK_ENDPOINT = '/api/unlock';
 
     // DOM Elements
     const apiStatus = document.getElementById('api-status');
@@ -1091,10 +1090,13 @@
     function getUsageState() {
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.USAGE) || '{}');
       const today = new Date().toISOString().split('T')[0];
+      const hasEmailOnFile = !!localStorage.getItem(STORAGE_KEYS.EMAIL);
 
-      // Reset if new day
+      // Reset if new day - preserve emailUnlocked status across days
       if (stored.date !== today) {
-        return { date: today, count: 0, remaining: 8, limit: 8, emailUnlocked: false };
+        // Unlocked users get 10/day, free users get 3/day (matches backend)
+        const limit = hasEmailOnFile ? 10 : 3;
+        return { date: today, count: 0, remaining: limit, limit, emailUnlocked: hasEmailOnFile };
       }
       return stored;
     }
@@ -1107,9 +1109,9 @@
       const usage = getUsageState();
       const hasEmail = !!localStorage.getItem(STORAGE_KEYS.EMAIL);
 
-      // Default remaining for fresh state
-      const remaining = usage.remaining !== undefined ? usage.remaining : (hasEmail ? 18 : 8);
-      const limit = hasEmail ? 18 : 8;
+      // Default remaining for fresh state (3 free / 10 unlocked)
+      const remaining = usage.remaining !== undefined ? usage.remaining : (hasEmail ? 10 : 3);
+      const limit = hasEmail ? 10 : 3;
 
       updateUsageUI(remaining, limit);
       checkUsageThresholds(remaining, limit, hasEmail);
@@ -1146,8 +1148,8 @@
         // Blocked - show blocked state
         blockedState?.classList.remove('hidden');
         uploadSection?.classList.add('hidden');
-      } else if (!hasEmail && remaining <= 2 && limit === 8) {
-        // Approaching limit without email - show email capture
+      } else if (!hasEmail && remaining <= 1 && limit === 3) {
+        // Approaching free tier limit - show email capture
         emailCapture?.classList.remove('hidden');
       }
     }
@@ -1158,47 +1160,47 @@
         return false;
       }
 
-      // Store locally
-      localStorage.setItem(STORAGE_KEYS.EMAIL, email);
+      try {
+        // Call server-side unlock endpoint (sets HTTP-only cookie)
+        const response = await fetch(UNLOCK_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin', // Include cookies
+          body: JSON.stringify({ email: email.trim() })
+        });
 
-      // Send to Formspree (with guard to prevent duplicate submissions)
-      const submissionCount = parseInt(localStorage.getItem(STORAGE_KEYS.EMAIL_SUBMISSIONS) || '0');
-      if (submissionCount < 3 && FORMSPREE_ENDPOINT !== 'https://formspree.io/f/YOUR_FORM_ID') {
-        try {
-          const response = await fetch(FORMSPREE_ENDPOINT, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-              email,
-              source: 'deal-analyzer-unlock',
-              timestamp: new Date().toISOString()
-            })
-          });
+        const data = await response.json();
 
-          if (response.ok) {
-            localStorage.setItem(STORAGE_KEYS.EMAIL_SUBMISSIONS, String(submissionCount + 1));
-          }
-        } catch (err) {
-          console.warn('Email capture failed:', err);
-          // Still unlock - don't punish user for network issues
+        if (!response.ok || !data.success) {
+          console.error('Unlock failed:', data.error);
+          alert(data.error?.message || 'Failed to unlock. Please try again.');
+          return false;
         }
+
+        // Store email locally for display purposes only
+        localStorage.setItem(STORAGE_KEYS.EMAIL, email);
+
+        // Update local usage state to reflect new limit
+        const usage = getUsageState();
+        usage.emailUnlocked = true;
+        usage.limit = data.limit || 10;
+        usage.remaining = usage.limit - usage.count;
+        saveUsageState(usage);
+
+        // Update UI
+        updateUsageUI(usage.remaining, usage.limit);
+        emailCapture?.classList.add('hidden');
+
+        return true;
+
+      } catch (err) {
+        console.error('Unlock request failed:', err);
+        alert('Network error. Please try again.');
+        return false;
       }
-
-      // Unlock bonus uses
-      const usage = getUsageState();
-      usage.emailUnlocked = true;
-      usage.remaining = (usage.remaining || 0) + 10;
-      usage.limit = 18;
-      saveUsageState(usage);
-
-      // Update UI
-      updateUsageUI(usage.remaining, usage.limit);
-      emailCapture?.classList.add('hidden');
-
-      return true;
     }
 
     function setupEventListeners() {

@@ -1,48 +1,193 @@
 /**
  * api/analyze.js - Vercel Serverless Function
  * Securely handles Gemini API calls using server-side API key
- * Includes daily rate limiting and input validation
+ * Includes durable rate limiting via Vercel KV and input validation
  */
 
-import fs from 'fs';
-import path from 'path';
+import { kv } from '@vercel/kv';
 
 // ==========================================
-// RATE LIMITING (File-based for persistence)
+// CONFIGURATION
 // ==========================================
 
 const LIMITS = {
-    FREE_TIER: 8,
-    EMAIL_TIER: 18,
+    FREE_TIER: 3,
+    UNLOCKED_TIER: 10,
 };
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024; // 5MB base64
+const MAX_TEXT_CONTEXT = 15000; // 15KB text context cap
+const MAX_IMAGES = 6;
 
-// Use /tmp for Vercel serverless (persists during warm starts)
-const USAGE_FILE = path.join('/tmp', 'rate-limit-usage.json');
+// Abuse detection patterns
+const ABUSE_PATTERNS = [
+    /\b(eval|javascript:|data:text\/html)\b/i,
+    /<script/i,
+    /on\w+\s*=/i // onclick=, onerror=, etc.
+];
 
 // ==========================================
-// TEXT CONTEXT FALLBACKS (Investor-First)
+// RATE LIMITING (Vercel KV - Durable)
+// ==========================================
+
+function getDailyKey(identifier) {
+    const today = new Date().toISOString().split('T')[0];
+    return `rate:${identifier}:${today}`;
+}
+
+async function checkDailyLimit(ip, unlockToken) {
+    // Determine if user is unlocked
+    let isUnlocked = false;
+    let identifier = ip;
+
+    if (unlockToken) {
+        // Check if unlock token is valid in KV
+        const tokenData = await kv.get(`unlock:${unlockToken}`);
+        if (tokenData) {
+            isUnlocked = true;
+            identifier = `unlocked:${unlockToken.substring(0, 16)}`; // Use token prefix as identifier
+        }
+    }
+
+    const limit = isUnlocked ? LIMITS.UNLOCKED_TIER : LIMITS.FREE_TIER;
+    const key = getDailyKey(identifier);
+
+    try {
+        // Use atomic increment - if key doesn't exist, starts at 0
+        const count = await kv.incr(key);
+
+        // Set expiry on first use (86400 seconds = 24 hours)
+        if (count === 1) {
+            await kv.expire(key, 86400);
+        }
+
+        console.log(`[Rate Limit] Key: ${key}, Count: ${count}, Limit: ${limit}, Unlocked: ${isUnlocked}`);
+
+        if (count > limit) {
+            return {
+                allowed: false,
+                remaining: 0,
+                limit,
+                needsEmail: !isUnlocked
+            };
+        }
+
+        return {
+            allowed: true,
+            remaining: limit - count,
+            limit,
+            needsEmail: !isUnlocked && count >= LIMITS.FREE_TIER
+        };
+    } catch (error) {
+        console.error('[Rate Limit] KV error, falling back to allow:', error.message);
+        // Fail open - if KV is down, allow the request but log it
+        return { allowed: true, remaining: 1, limit, needsEmail: !isUnlocked };
+    }
+}
+
+function getClientIP(req) {
+    const forwarded = req.headers['x-forwarded-for']?.split(',')[0]?.trim();
+    const realIp = req.headers['x-real-ip'];
+    let ip = forwarded || realIp || 'unknown';
+
+    // Normalize IPv6 localhost
+    if (ip === '::1' || ip === '::ffff:127.0.0.1') {
+        ip = '127.0.0.1';
+    }
+
+    return ip;
+}
+
+function getUnlockToken(req) {
+    // Parse cookies from request
+    const cookieHeader = req.headers.cookie || '';
+    const cookies = Object.fromEntries(
+        cookieHeader.split(';').map(c => {
+            const [key, ...val] = c.trim().split('=');
+            return [key, val.join('=')];
+        })
+    );
+    return cookies.unlockToken || null;
+}
+
+// ==========================================
+// DATA NORMALIZATION
 // ==========================================
 
 function parseMoney(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
     if (typeof value !== 'string') return 0;
-    const cleaned = value.replace(/[^0-9.\-]/g, '');
-    const num = Number(cleaned);
-    return Number.isFinite(num) ? num : 0;
+
+    // Handle: "$1,234,567.89", "1234567", "1.2M", "$1.5B"
+    let cleaned = value.replace(/[^0-9.\-KMBkmb]/g, '');
+
+    // Handle K/M/B multipliers
+    const multipliers = { k: 1e3, m: 1e6, b: 1e9 };
+    const multiplierMatch = cleaned.match(/([0-9.]+)([KMBkmb])/);
+    if (multiplierMatch) {
+        const num = parseFloat(multiplierMatch[1]);
+        const mult = multipliers[multiplierMatch[2].toLowerCase()];
+        return Number.isFinite(num) ? Math.max(0, num * mult) : 0;
+    }
+
+    const num = parseFloat(cleaned);
+    return Number.isFinite(num) ? Math.max(0, num) : 0;
 }
 
-function ensureStringArray(value) {
-    if (!Array.isArray(value)) return [];
-    return value.filter(v => typeof v === 'string');
+function normalizePropertyData(raw) {
+    const schema = {
+        address: { type: 'string', maxLen: 500 },
+        units: { type: 'integer', min: 0, max: 10000 },
+        askingPrice: { type: 'money', min: 0, max: 1e10 },
+        grossRent: { type: 'money', min: 0, max: 1e8 },
+        propertyTaxes: { type: 'money', min: 0, max: 1e8 },
+        insurance: { type: 'money', min: 0, max: 1e8 },
+        utilities: { type: 'money', min: 0, max: 1e8 },
+        noi: { type: 'money', min: -1e9, max: 1e10 },
+        estimates: { type: 'array', maxLen: 20 }
+    };
+
+    const normalized = {};
+
+    for (const [key, config] of Object.entries(schema)) {
+        const value = raw[key];
+
+        switch (config.type) {
+            case 'string':
+                normalized[key] = typeof value === 'string'
+                    ? value.trim().substring(0, config.maxLen)
+                    : '';
+                break;
+
+            case 'integer':
+                const intVal = parseInt(parseMoney(value), 10);
+                normalized[key] = Math.min(Math.max(intVal || 0, config.min), config.max);
+                break;
+
+            case 'money':
+                const moneyVal = parseMoney(value);
+                normalized[key] = Math.min(Math.max(moneyVal, config.min), config.max);
+                break;
+
+            case 'array':
+                normalized[key] = Array.isArray(value)
+                    ? value.filter(v => typeof v === 'string').slice(0, config.maxLen)
+                    : [];
+                break;
+        }
+    }
+
+    return normalized;
 }
+
+// ==========================================
+// TEXT CONTEXT FALLBACKS
+// ==========================================
 
 function deriveGrossRentFromTextContext(textContext) {
     if (typeof textContext !== 'string' || textContext.trim().length === 0) return null;
 
-    // Unit-mix "Total" rows often appear as:
-    // "Total 51 835 SF $1,966 $2.35"  (units, avg size, avg rent, rent psf)
     const totalRowRegex = /Total\s+(\d{1,5})\s+\d{1,5}\s*SF\s*\$?\s*([0-9]{1,3}(?:,[0-9]{3})*)(?:\.[0-9]{1,2})?\s+\$?\s*\d+(?:\.\d+)?/gi;
 
     let match;
@@ -55,8 +200,6 @@ function deriveGrossRentFromTextContext(textContext) {
 
         if (!Number.isFinite(units) || units <= 0) continue;
         if (!Number.isFinite(avgRent) || avgRent <= 0) continue;
-
-        // Guardrails: avg rent from unit-mix should be a realistic monthly per-unit figure.
         if (avgRent < 250 || avgRent > 20000) continue;
 
         sumUnits += units;
@@ -67,95 +210,10 @@ function deriveGrossRentFromTextContext(textContext) {
     return { grossRent: sumGrossRent, units: sumUnits };
 }
 
-function loadUsageData() {
-    try {
-        if (fs.existsSync(USAGE_FILE)) {
-            const data = fs.readFileSync(USAGE_FILE, 'utf8');
-            return JSON.parse(data);
-        }
-    } catch (error) {
-        console.error('[Rate Limit] Error loading usage data:', error.message);
-    }
-    return {};
-}
-
-function saveUsageData(data) {
-    try {
-        fs.writeFileSync(USAGE_FILE, JSON.stringify(data), 'utf8');
-    } catch (error) {
-        console.error('[Rate Limit] Error saving usage data:', error.message);
-    }
-}
-
-function getDailyKey(ip) {
-    const today = new Date().toISOString().split('T')[0];
-    return `${ip}:${today}`;
-}
-
-function checkDailyLimit(ip, hasEmailUnlock) {
-    const key = getDailyKey(ip);
-    const allUsage = loadUsageData();
-    const usage = allUsage[key] || { count: 0, emailUnlocked: false };
-
-    console.log(`[Rate Limit] Checking limit for key: ${key}`);
-    console.log(`[Rate Limit] Current usage:`, usage);
-    console.log(`[Rate Limit] Has email unlock: ${hasEmailUnlock}`);
-
-    // Check if this is a new day (reset)
-    const limit = usage.emailUnlocked || hasEmailUnlock
-        ? LIMITS.EMAIL_TIER
-        : LIMITS.FREE_TIER;
-
-    if (usage.count >= limit) {
-        console.log(`[Rate Limit] BLOCKED - count ${usage.count} >= limit ${limit}`);
-        return {
-            allowed: false,
-            remaining: 0,
-            limit,
-            needsEmail: !usage.emailUnlocked && limit === LIMITS.FREE_TIER
-        };
-    }
-
-    // Allow and increment
-    usage.count++;
-    if (hasEmailUnlock) usage.emailUnlocked = true;
-
-    // Save updated usage
-    allUsage[key] = usage;
-    saveUsageData(allUsage);
-
-    const remaining = limit - usage.count;
-    console.log(`[Rate Limit] ALLOWED - incremented to ${usage.count}, remaining: ${remaining}`);
-    console.log(`[Rate Limit] Saved usage to file`);
-
-    return {
-        allowed: true,
-        remaining,
-        limit,
-        needsEmail: usage.count >= LIMITS.FREE_TIER && !usage.emailUnlocked
-    };
-}
-
-function getClientIP(req) {
-    const forwarded = req.headers['x-forwarded-for']?.split(',')[0]?.trim();
-    const realIp = req.headers['x-real-ip'];
-    const socketIp = req.socket?.remoteAddress;
-
-    // Normalize localhost addresses to a single value
-    let ip = forwarded || realIp || socketIp || 'unknown';
-
-    // Normalize IPv6 localhost to IPv4
-    if (ip === '::1' || ip === '::ffff:127.0.0.1') {
-        ip = '127.0.0.1';
-    }
-
-    console.log(`[Rate Limit] Client IP detected: ${ip} (forwarded: ${forwarded}, real: ${realIp}, socket: ${socketIp})`);
-    return ip;
-}
-
 // ==========================================
 // EXTRACTION PROMPT
 // ==========================================
+
 const EXTRACTION_PROMPT = `Act as a Senior Real Estate Investment Analyst. 
 Analyze this property document (broker flyer, listing, or pro-forma) and extract the following data:
 
@@ -176,113 +234,132 @@ CRITICAL EXTRACTION RULES:
    - Sum up "Real Estate Taxes" for propertyTaxes.
    - Sum up "Insurance" for insurance.
    - Sum up "Utilities" (Water, Sewer, Gas, Electric, Trash, Hydro, Oil) for utilities.
-   - Sum up "Repairs", "Maintenance", "Turnover", "Landscaping" for other expenses.
-4. **Calculated NOI Check:** If the document explicitly states "Net Operating Income" or "NOI", TRUST THIS NUMBER and populate the 'noi' field.
+4. **Calculated NOI Check:** If the document explicitly states "Net Operating Income" or "NOI", TRUST THIS NUMBER.
 5. **Gross Rent:** If "Gross Potential Rent" and "Effective Gross Income" are both present, use "Gross Potential Rent". Convert Annual -> Monthly by dividing by 12.
-6. **Unit Mix:** If specific annual rent or total monthly rent is missing, calculate it: (Avg Rent * Total Units).
-7. **Spaced Text:** Watch out for stylized headers like "1 2 1 U N I T S". Interpret "1 2 1" as 121.
+6. **Spaced Text:** Watch out for stylized headers like "1 2 1 U N I T S". Interpret "1 2 1" as 121.
 
 FALLBACK RULES:
-1. **Utilities:** If text says "Individually Metered" or "Tenant Pays", set utilities to a low estimate (e.g. $100/unit for common area) rather than 0.
+1. **Utilities:** If text says "Individually Metered" or "Tenant Pays", set utilities to a low estimate (e.g. $100/unit for common area).
 2. **Insurance:** If missing, ESTIMATE at $450 per unit/year.
-3. **Property Taxes:** If missing but a mill rate or assessment is roughly known, estimate at 1.1% of Asking Price.
-4. **General:** If a value is NOT explicitly shown, ESTIMATE it based on typical ratios and mark it in "estimates". DO NOT RETURN 0 unless explicitly stated as "Tenant Pays".
+3. **Property Taxes:** If missing, estimate at 1.1% of Asking Price.
+4. **General:** If a value is NOT explicitly shown, ESTIMATE it and mark it in "estimates".
 
 OUTPUT FORMAT (JSON only, no markdown):
 {"address":"","units":0,"askingPrice":0,"grossRent":0,"propertyTaxes":0,"insurance":0,"utilities":0,"noi":0,"estimates":[]}
 `;
 
+// ==========================================
+// RESPONSE HELPERS
+// ==========================================
+
+function errorResponse(res, status, code, message, extra = {}) {
+    return res.status(status).json({
+        success: false,
+        error: { code, message },
+        ...extra
+    });
+}
+
+// ==========================================
+// MAIN HANDLER
+// ==========================================
 
 export default async function handler(req, res) {
     // 1. Only allow POST requests
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed' });
+        return errorResponse(res, 405, 'METHOD_NOT_ALLOWED', 'Method Not Allowed');
     }
 
-    const { image, images, mimeType, emailUnlocked, textContext } = req.body;
+    // Log request (partial IP for privacy)
+    const clientIP = getClientIP(req);
+    console.log(JSON.stringify({
+        event: 'analyze_request',
+        ip: clientIP.substring(0, 8) + '***',
+        timestamp: new Date().toISOString()
+    }));
 
-    // 2. Validate input exists - Support both single 'image' and 'images' array
+    const { image, images, mimeType, textContext } = req.body;
+    // NOTE: emailUnlocked is NOT read from request body - derived server-side
+
+    // 2. Validate input exists
     if ((!image && (!images || images.length === 0)) || !mimeType) {
-        return res.status(400).json({ error: 'Missing image data or mimeType' });
+        return errorResponse(res, 400, 'MISSING_INPUT', 'Missing image data or mimeType');
     }
 
-    // Prepare image parts for Gemini
+    // 3. Validate mimeType (PDF not allowed - client converts to JPEG)
+    if (!ALLOWED_TYPES.includes(mimeType)) {
+        return errorResponse(res, 400, 'INVALID_TYPE',
+            `Unsupported file type. Allowed: ${ALLOWED_TYPES.join(', ')}`);
+    }
+
+    // 4. Prepare and validate images
     const imageParts = [];
     let totalPayloadSize = 0;
 
-    if (images && images.length > 0) {
-        // Multi-image mode (Visual Compression)
-        for (const imgData of images) {
-            if (typeof imgData !== 'string') {
-                return res.status(400).json({ error: 'Invalid image data in array. Expected base64 string.' });
-            }
-            imageParts.push({
-                inlineData: {
-                    data: imgData,
-                    mimeType: mimeType
-                }
-            });
-            totalPayloadSize += imgData.length;
-        }
-    } else if (image) {
-        // Legacy single-image mode
-        if (typeof image !== 'string') {
-            return res.status(400).json({ error: 'Invalid image data. Expected base64 string.' });
+    const imageArray = images && images.length > 0 ? images : (image ? [image] : []);
+
+    if (imageArray.length > MAX_IMAGES) {
+        return errorResponse(res, 400, 'TOO_MANY_IMAGES', `Maximum ${MAX_IMAGES} images allowed`);
+    }
+
+    for (const imgData of imageArray) {
+        if (typeof imgData !== 'string') {
+            return errorResponse(res, 400, 'INVALID_IMAGE', 'Invalid image data. Expected base64 string.');
         }
         imageParts.push({
-            inlineData: {
-                data: image,
-                mimeType: mimeType
-            }
+            inlineData: { data: imgData, mimeType }
         });
-        totalPayloadSize += image.length;
+        totalPayloadSize += imgData.length;
     }
 
     if (imageParts.length === 0) {
-        return res.status(400).json({ error: 'No valid image data provided.' });
+        return errorResponse(res, 400, 'NO_IMAGES', 'No valid image data provided');
     }
 
-    // 3. Validate mimeType
-    if (!ALLOWED_TYPES.includes(mimeType)) {
-        return res.status(400).json({
-            error: `Unsupported file type. Allowed: ${ALLOWED_TYPES.join(', ')}`
-        });
-    }
-
-    // 4. Validate payload size (5MB max for base64)
+    // 5. Validate payload size
     if (totalPayloadSize > MAX_PAYLOAD_SIZE) {
-        return res.status(413).json({ error: `Total file size too large. Maximum ${MAX_PAYLOAD_SIZE / (1024 * 1024)}MB.` });
+        return errorResponse(res, 413, 'PAYLOAD_TOO_LARGE',
+            `Total file size too large. Maximum ${MAX_PAYLOAD_SIZE / (1024 * 1024)}MB.`);
     }
 
-    // 5. Check rate limit
-    const clientIP = getClientIP(req);
-    const rateCheck = await checkDailyLimit(clientIP, emailUnlocked === true); // Await checkDailyLimit
+    // 6. Sanitize textContext
+    let sanitizedTextContext = '';
+    if (textContext && typeof textContext === 'string') {
+        // Check for abuse patterns
+        if (ABUSE_PATTERNS.some(p => p.test(textContext))) {
+            console.warn('[Security] Abuse pattern detected in textContext');
+            return errorResponse(res, 400, 'INVALID_CONTENT', 'Invalid content detected');
+        }
+        sanitizedTextContext = textContext.substring(0, MAX_TEXT_CONTEXT);
+    }
 
-    // Set rate limit headers for frontend
+    // 7. Check rate limit (server-side, using cookie token)
+    const unlockToken = getUnlockToken(req);
+    const rateCheck = await checkDailyLimit(clientIP, unlockToken);
+
+    // Set rate limit headers
     res.setHeader('X-Daily-Remaining', rateCheck.remaining);
     res.setHeader('X-Daily-Limit', rateCheck.limit);
     res.setHeader('X-Needs-Email', rateCheck.needsEmail ? 'true' : 'false');
 
     if (!rateCheck.allowed) {
-        return res.status(429).json({
-            error: 'Daily limit reached. Come back tomorrow or unlock more with your email.',
-            remaining: 0,
-            limit: rateCheck.limit,
-            needsEmail: rateCheck.needsEmail
-        });
+        console.log(JSON.stringify({ event: 'rate_limit_hit', ip: clientIP.substring(0, 8) + '***' }));
+        return errorResponse(res, 429, 'RATE_LIMIT',
+            'Daily limit reached. Unlock more analyses with your email.',
+            { remaining: 0, limit: rateCheck.limit, needsEmail: rateCheck.needsEmail });
     }
 
-    // 6. Check API key
+    // 8. Check API key
     const API_KEY = process.env.GEMINI_API_KEY;
     if (!API_KEY) {
-        console.error('GEMINI_API_KEY is not configured in environment variables');
-        return res.status(500).json({ error: 'Server configuration error' });
+        console.error('GEMINI_API_KEY is not configured');
+        return errorResponse(res, 500, 'CONFIG_ERROR', 'Server configuration error');
     }
 
     const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-    const finalPrompt = textContext
-        ? `${EXTRACTION_PROMPT}\n\nDOCUMENT TEXT CONTEXT (Use this for facts not visible in the provided images):\n${textContext.substring(0, 30000)}`
+    const finalPrompt = sanitizedTextContext
+        ? `${EXTRACTION_PROMPT}\n\nDOCUMENT TEXT CONTEXT:\n${sanitizedTextContext}`
         : EXTRACTION_PROMPT;
 
     const requestBody = {
@@ -300,7 +377,7 @@ export default async function handler(req, res) {
     };
 
     try {
-        console.log(`[Backend] Calling Gemini API for mimeType: ${mimeType}`);
+        console.log(`[Backend] Calling Gemini API with ${imageParts.length} images`);
         const response = await fetch(`${API_URL}?key=${API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -312,110 +389,86 @@ export default async function handler(req, res) {
         if (!response.ok) {
             const errorData = await response.json();
             console.error('[Backend] Gemini Error:', JSON.stringify(errorData));
-            throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+            const geminiMessage = errorData.error?.message || `API Error: ${response.status}`;
+
+            // Map Gemini errors to user-friendly codes
+            if (response.status === 429) {
+                return errorResponse(res, 429, 'AI_RATE_LIMIT', 'AI service is busy. Please try again in a moment.');
+            }
+            return errorResponse(res, 500, 'AI_ERROR', geminiMessage);
         }
 
         const data = await response.json();
-        console.log('[Backend] Gemini Data Received');
-
         const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (!textContent) {
-            console.error('[Backend] Empty textContent in candidate:', JSON.stringify(data));
-            throw new Error('No content in API response');
+            console.error('[Backend] Empty response from Gemini');
+            return errorResponse(res, 500, 'EMPTY_RESPONSE', 'No content in AI response');
         }
 
-        console.log('[Backend] Extracted Text Snippet:', textContent.substring(0, 200));
-
-        // Parse JSON from response - try multiple strategies
+        // Parse JSON from response
         let propertyData;
-
-        // Strategy 1: Try to find JSON block (with or without markdown)
         const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+
         if (jsonMatch) {
             try {
                 propertyData = JSON.parse(jsonMatch[0]);
-                console.log('[Backend] Parse Successful (Strategy 1)');
             } catch (e) {
-                console.error('[Backend] JSON parse failed (Strategy 1):', e.message);
-                console.error('[Backend] Attempted to parse:', jsonMatch[0].substring(0, 200));
-            }
-        }
-
-        // Strategy 2: Try to extract from markdown code block
-        if (!propertyData) {
-            const codeBlockMatch = textContent.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-            if (codeBlockMatch) {
+                // Try cleaning up common issues
                 try {
-                    propertyData = JSON.parse(codeBlockMatch[1]);
-                    console.log('[Backend] Parse Successful (Strategy 2 - markdown)');
-                } catch (e) {
-                    console.error('[Backend] JSON parse failed (Strategy 2):', e.message);
+                    const cleaned = jsonMatch[0]
+                        .replace(/```json|```/g, '')
+                        .replace(/,(\s*[}\]])/g, '$1')
+                        .trim();
+                    propertyData = JSON.parse(cleaned);
+                } catch (e2) {
+                    console.error('[Backend] JSON parse failed:', e2.message);
                 }
             }
         }
-
-        // Strategy 3: Clean up common issues and retry
-        if (!propertyData && jsonMatch) {
-            try {
-                // Remove markdown formatting, trailing commas, etc.
-                let cleaned = jsonMatch[0]
-                    .replace(/```json|```/g, '')
-                    .replace(/,(\s*[}\]])/g, '$1')  // Remove trailing commas
-                    .trim();
-                propertyData = JSON.parse(cleaned);
-                console.log('[Backend] Parse Successful (Strategy 3 - cleaned)');
-            } catch (e) {
-                console.error('[Backend] JSON parse failed (Strategy 3):', e.message);
-            }
-        }
-
 
         if (!propertyData) {
-            console.error('[Backend] All parsing strategies failed');
-            console.error('[Backend] Full response:', textContent);
-            const snippet = textContent.substring(0, 300);
-            throw new Error(`Could not parse JSON from AI response. AI returned: "${snippet}..."`);
+            console.error('[Backend] Could not parse AI response');
+            return errorResponse(res, 500, 'PARSE_ERROR', 'Could not parse AI response');
         }
 
-        // Investor-first sanity: If Gemini misreads unit-mix rent (common OCR/table issue),
-        // override an implausible grossRent with a deterministic parse from textContext.
-        const derivedRent = deriveGrossRentFromTextContext(textContext);
+        // Normalize data with schema validation
+        const normalizedData = normalizePropertyData(propertyData);
+
+        // Apply textContext fallback for gross rent if needed
+        const derivedRent = deriveGrossRentFromTextContext(sanitizedTextContext);
         if (derivedRent) {
-            const aiUnits = Number(propertyData.units) || 0;
-            const aiGrossRent = Number(propertyData.grossRent) || 0;
+            const aiGrossRent = normalizedData.grossRent || 0;
+            const aiUnits = normalizedData.units || 0;
             const aiPerUnit = aiUnits > 0 ? (aiGrossRent / aiUnits) : 0;
+            const derivedPerUnit = derivedRent.units > 0 ? (derivedRent.grossRent / derivedRent.units) : 0;
 
-            const derivedUnits = derivedRent.units;
-            const derivedPerUnit = derivedUnits > 0 ? (derivedRent.grossRent / derivedUnits) : 0;
-
-            const aiLooksImplausible = aiGrossRent <= 0 || (aiUnits > 0 && aiPerUnit < 300);
-            const derivedLooksPlausible = derivedPerUnit >= 500;
-
-            if (aiLooksImplausible && derivedLooksPlausible) {
-                propertyData.grossRent = derivedRent.grossRent;
-                propertyData.estimates = ensureStringArray(propertyData.estimates);
-                if (!propertyData.estimates.includes('grossRent')) {
-                    propertyData.estimates.push('grossRent');
+            if ((aiGrossRent <= 0 || aiPerUnit < 300) && derivedPerUnit >= 500) {
+                normalizedData.grossRent = derivedRent.grossRent;
+                if (!normalizedData.estimates.includes('grossRent')) {
+                    normalizedData.estimates.push('grossRent');
                 }
-                console.log(`[Backend] Overrode grossRent with unit-mix total: ${derivedRent.grossRent} (units=${derivedUnits})`);
+                console.log(`[Backend] Applied fallback grossRent: ${derivedRent.grossRent}`);
             }
         }
+
+        console.log(JSON.stringify({
+            event: 'analyze_success',
+            extractedFields: Object.keys(normalizedData).filter(k => normalizedData[k]),
+            estimatesCount: normalizedData.estimates?.length || 0
+        }));
 
         return res.status(200).json({
             success: true,
-            data: propertyData,
-            estimates: propertyData.estimates || [],
+            data: normalizedData,
+            estimates: normalizedData.estimates || [],
             remaining: rateCheck.remaining,
             limit: rateCheck.limit,
             needsEmail: rateCheck.needsEmail
         });
 
     } catch (error) {
-        console.error('[Backend] API Error:', error);
-        return res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        console.error('[Backend] Unexpected error:', error);
+        return errorResponse(res, 500, 'SERVER_ERROR', 'An unexpected error occurred');
     }
 }

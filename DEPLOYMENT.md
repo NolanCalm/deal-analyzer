@@ -75,9 +75,9 @@ Headers: X-Daily-Remaining, X-Daily-Limit, X-Needs-Email ✅
 - ✅ Mobile camera capture support
 
 ### API Abuse Prevention
-- ✅ **Free Tier:** 8 analyses per day
-- ✅ **Email Unlock:** +10 bonus (18 total)
-- ✅ **Hard Limit:** 18 analyses maximum
+- ✅ **Free Tier:** 3 analyses per day
+- ✅ **Email Unlock:** +7 bonus (10 total)
+- ✅ **Hard Limit:** 10 analyses maximum
 - ✅ **Rate Limit Headers:** Visible to frontend
 - ✅ **Persistent Storage:** File-based (/tmp)
 
