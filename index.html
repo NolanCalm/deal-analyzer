@@ -1073,6 +1073,7 @@
     const errorDismissBtn = document.getElementById('error-dismiss');
 
     // Error type messages for user-friendly display
+    // Error type messages for user-friendly display
     const ERROR_MESSAGES = {
       RATE_LIMIT: {
         title: 'AI is busy',
@@ -1084,14 +1085,19 @@
         detail: 'Our AI service is temporarily unavailable. Try again in a minute.',
         canRetry: true
       },
-      API_ERROR: {
-        title: 'Analysis failed',
-        detail: 'Could not extract data from this document. Try a clearer image.',
-        canRetry: false
+      PAYLOAD_TOO_LARGE: {
+        title: 'File too large',
+        detail: 'This file is too complex. We\'re optimizing it, please try again.',
+        canRetry: true
       },
       DAILY_LIMIT: {
         title: 'Daily limit reached',
         detail: 'You\'ve used all free analyses. Unlock more with your email.',
+        canRetry: false
+      },
+      API_ERROR: {
+        title: 'Analysis failed',
+        detail: 'Something went wrong during analysis.',
         canRetry: false
       }
     };
@@ -1103,7 +1109,17 @@
       const config = ERROR_MESSAGES[errorType] || ERROR_MESSAGES.API_ERROR;
 
       document.getElementById('error-title').textContent = config.title;
-      document.getElementById('error-detail').textContent = config.detail;
+
+      // Use specific error message if available and safe, otherwise use friendly default
+      let detail = config.detail;
+      if (rawError && typeof rawError === 'string') {
+        // If it's a generic API_ERROR, prefer the raw message if it's readable
+        if (errorType === 'API_ERROR' && rawError.length < 100 && !rawError.includes('Undefined')) {
+          detail = rawError;
+        }
+      }
+      document.getElementById('error-detail').textContent = detail;
+
       errorRetryBtn.style.display = config.canRetry ? 'block' : 'none';
       errorToast.classList.remove('hidden');
 
@@ -1125,9 +1141,12 @@
     function getErrorType(error) {
       if (!error) return 'API_ERROR';
       const errorStr = String(error).toLowerCase();
+
       if (errorStr.includes('daily limit') || errorStr.includes('rate limit')) return 'DAILY_LIMIT';
       if (errorStr.includes('429') || errorStr.includes('resource exhausted') || errorStr.includes('too many')) return 'RATE_LIMIT';
+      if (errorStr.includes('413') || errorStr.includes('payload too large')) return 'PAYLOAD_TOO_LARGE';
       if (errorStr.includes('500') || errorStr.includes('503') || errorStr.includes('unavailable')) return 'SERVER_ERROR';
+
       return 'API_ERROR';
     }
 
