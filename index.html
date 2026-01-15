@@ -1488,10 +1488,9 @@
       // Sort by score descending and fill remaining slots
       const sortedPages = pageScores.sort((a, b) => b.score - a.score);
 
-      // Reverted to 1.5x scale per user request.
-      // MUST limit to 3 pages max to stay under Vercel 4.5MB payload limit with high-res images.
+      // Take top highest scoring pages until we have 6 total (Restored Golden State)
       for (const p of sortedPages) {
-        if (selectedIndices.size >= 3) break;
+        if (selectedIndices.size >= 6) break;
         selectedIndices.add(p.pageIndex);
       }
 
@@ -1518,8 +1517,8 @@
 
         await page.render({ canvasContext: context, viewport: viewport }).promise;
 
-        // Compressed JPEG (0.4 quality fits Vercel 4.5MB limit)
-        const base64 = canvas.toDataURL('image/jpeg', 0.4).split(',')[1];
+        // Medium quality JPEG (Restored Golden State)
+        const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
         images.push(base64);
       }
 
