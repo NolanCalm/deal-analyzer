@@ -3,20 +3,20 @@
  * Handles email capture, creates unlock tokens, and stores in Redis
  */
 
-import { Redis } from '@upstash/redis';
+import Redis from 'ioredis';
 import crypto from 'crypto';
 
-// Initialize Redis - supports both REST format and REDIS_URL
+// Initialize Redis from REDIS_URL
 let redis;
 try {
-    if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-        redis = Redis.fromEnv();
-    } else if (process.env.REDIS_URL) {
-        const url = new URL(process.env.REDIS_URL);
-        const restUrl = `https://${url.hostname}`;
-        const token = url.password;
-        redis = new Redis({ url: restUrl, token });
-        console.log('[Redis] Initialized from REDIS_URL');
+    if (process.env.REDIS_URL) {
+        redis = new Redis(process.env.REDIS_URL, {
+            tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined
+        });
+
+        redis.on('error', (err) => {
+            console.warn('[Redis] Connection error:', err.message);
+        });
     }
 } catch (e) {
     console.warn('[Redis] Could not initialize:', e.message);

@@ -1,27 +1,25 @@
 /**
  * api/analyze.js - Vercel Serverless Function
  * Securely handles Gemini API calls using server-side API key
- * Includes durable rate limiting via Upstash Redis and input validation
+ * Includes durable rate limiting via Redis (ioredis)
  */
 
-import { Redis } from '@upstash/redis';
+import Redis from 'ioredis';
 
-// Initialize Redis - supports both REST format and REDIS_URL
+// Initialize Redis from REDIS_URL
 let redis;
 try {
-    // Try standard Upstash env vars first
-    if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-        redis = Redis.fromEnv();
-    }
-    // Fall back to REDIS_URL (parse connection string)
-    else if (process.env.REDIS_URL) {
-        // REDIS_URL format: rediss://default:TOKEN@HOST:PORT
-        // REST URL format: https://HOST
-        const url = new URL(process.env.REDIS_URL);
-        const restUrl = `https://${url.hostname}`;
-        const token = url.password;
-        redis = new Redis({ url: restUrl, token });
-        console.log('[Redis] Initialized from REDIS_URL');
+    if (process.env.REDIS_URL) {
+        redis = new Redis(process.env.REDIS_URL, {
+            // Check if we need TLS options for your specific provider
+            // Usually proper REDIS_URL handles it (rediss://)
+            tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined
+        });
+
+        // Handle connection errors preventing crash
+        redis.on('error', (err) => {
+            console.warn('[Redis] Connection error:', err.message);
+        });
     }
 } catch (e) {
     console.warn('[Redis] Could not initialize:', e.message);
