@@ -956,9 +956,11 @@
 
         // Handle rate limit response
         if (response.status === 429) {
+          const errorMsg = data.error?.message || data.error || 'Daily limit reached';
           return {
             success: false,
-            error: data.error || 'Daily limit reached',
+            error: errorMsg,
+            errorCode: data.error?.code || 'RATE_LIMIT',
             remaining: data.remaining,
             limit: data.limit,
             needsEmail: data.needsEmail
@@ -966,7 +968,8 @@
         }
 
         if (!response.ok) {
-          throw new Error(data.error || `API Error: ${response.status}`);
+          const errorMsg = data.error?.message || data.error || `API Error: ${response.status}`;
+          throw new Error(errorMsg);
         }
 
         return data;
@@ -1403,7 +1406,7 @@
         saveToLocalStorage();
         showDataAndMetrics();
 
-      } else if (result.error && result.error.includes('Daily limit')) {
+      } else if (result.errorCode === 'RATE_LIMIT' || result.errorCode === 'DAILY_LIMIT' || (result.error && typeof result.error === 'string' && result.error.includes('Daily limit'))) {
         const newUsage = { ...usage, remaining: 0 };
         saveUsageState(newUsage);
         updateUsageUI(0, result.limit || usage.limit || 8);
