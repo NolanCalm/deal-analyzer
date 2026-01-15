@@ -933,33 +933,15 @@
 
       try {
         if (mimeType === 'application/pdf') {
-          // Try High Quality First (1.5x scale, 6 pages)
-          const highQual = await processPdfSmart(file, 'high');
-          payload.images = highQual.images;
-          payload.textContext = highQual.text;
+          const { images, text } = await processPdfSmart(file);
+          payload.images = images;
+          payload.textContext = text;
           payload.mimeType = 'image/jpeg';
-
-          try {
-            return await callAnalyzeApi(payload);
-          } catch (err) {
-            // If payload too large (413) or other non-rate-limit error, try optimization
-            if (err.message.includes('Payload Too Large') || err.message.includes('413') || err.message.includes('Failed to fetch')) {
-              console.log('High quality upload failed/too large. Retrying with optimization...');
-
-              // Fallback to Low Quality (1.0x scale, 4 pages)
-              const lowQual = await processPdfSmart(file, 'low');
-              payload.images = lowQual.images;
-              payload.textContext = lowQual.text; // Truncated text
-
-              return await callAnalyzeApi(payload);
-            }
-            throw err; // Re-throw if it's not a size issue (e.g. 500 or 429)
-          }
-
         } else {
           payload.image = await fileToBase64(file);
-          return await callAnalyzeApi(payload);
         }
+
+        return await callAnalyzeApi(payload);
 
       } catch (error) {
         console.error('Extraction error (Detailed):', error);
@@ -1470,17 +1452,13 @@
     }
 
     /**
-     * Smart PDF Processing with Quality Fallback
+     * Smart PDF Processing
+     * 1. Extracts full text (cheap)
+     * 2. Selects key pages based on keywords (financials, tables)
+     * 3. Renders only those pages to images
      */
-    async function processPdfSmart(file, qualityLevel = 'high') {
-      const scale = qualityLevel === 'high' ? 1.5 : 1.0;
-      const jpegQuality = qualityLevel === 'high' ? 0.6 : 0.4;
-      const maxPages = qualityLevel === 'high' ? 6 : 4;
-
-      document.getElementById('loading-text').textContent = qualityLevel === 'high'
-        ? 'Scanning document...'
-        : 'Optimizing for upload...';
-
+    async function processPdfSmart(file) {
+      document.getElementById('loading-text').textContent = 'Scanning document...';
       await new Promise(r => setTimeout(r, 50));
 
       const arrayBuffer = await file.arrayBuffer();
@@ -1492,10 +1470,8 @@
 
       // Pass 1: Text Extraction & Page Scoring
       for (let i = 1; i <= totalPages; i++) {
-        if (qualityLevel === 'high') { // Only update text on first pass
-          document.getElementById('loading-text').textContent = `Scanning page ${i} of ${totalPages}...`;
-          await new Promise(r => setTimeout(r, 5));
-        }
+        document.getElementById('loading-text').textContent = `Scanning page ${i} of ${totalPages}...`;
+        await new Promise(r => setTimeout(r, 5));
 
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
@@ -1532,29 +1508,28 @@
       // Sort by score descending and fill remaining slots
       const sortedPages = pageScores.sort((a, b) => b.score - a.score);
 
+      // Take top highest scoring pages until we have 6 total (Restored Golden State)
       for (const p of sortedPages) {
-        if (selectedIndices.size >= maxPages) break;
+        if (selectedIndices.size >= 6) break;
         selectedIndices.add(p.pageIndex);
       }
 
-      // If document is small (< max pages), take all
-      if (totalPages <= maxPages) {
+      // If document is small (< 5 pages), just take all
+      if (totalPages <= 5) {
         for (let i = 1; i <= totalPages; i++) selectedIndices.add(i);
       }
 
       const pagesToRender = Array.from(selectedIndices).sort((a, b) => a - b);
-      console.log(`Smart Selected Pages (${qualityLevel}):`, pagesToRender);
+      console.log('Smart Selected Pages:', pagesToRender);
 
       // Pass 3: Render Selected Pages
       const images = [];
       for (const pageNum of pagesToRender) {
-        if (qualityLevel === 'high') {
-          document.getElementById('loading-text').textContent = `Processing key page ${pageNum}...`;
-          await new Promise(r => setTimeout(r, 10));
-        }
+        document.getElementById('loading-text').textContent = `Processing key page ${pageNum}...`;
+        await new Promise(r => setTimeout(r, 10));
 
         const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: scale });
+        const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
@@ -1562,14 +1537,12 @@
 
         await page.render({ canvasContext: context, viewport: viewport }).promise;
 
-        const base64 = canvas.toDataURL('image/jpeg', jpegQuality).split(',')[1];
+        // Medium quality JPEG (Restored Golden State)
+        const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
         images.push(base64);
       }
 
-      // Truncate text context slightly if low quality to ensure fit
-      const textContext = qualityLevel === 'high' ? fullText : fullText.substring(0, 50000);
-
-      return { images, text: textContext };
+      return { images, text: fullText };
     }
 
 
