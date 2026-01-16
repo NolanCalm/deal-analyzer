@@ -10,7 +10,7 @@ import crypto from 'crypto';
 const SIGNING_SECRET = process.env.GEMINI_API_KEY || 'deal-analyzer-fallback-secret-2024';
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
 
-// Initialize Redis from REDIS_URL (converting TCP -> HTTP)
+// Initialize Redis from REDIS_URL (converting TCP -> HTTP) or Upstash env vars
 let redis;
 try {
     if (process.env.REDIS_URL && process.env.REDIS_URL.includes('rediss://')) {
@@ -25,17 +25,8 @@ try {
             url: baseUrl,
             token: token
         });
-    } else if (process.env.UPSTASH_REDIS_REST_URL) {
-
-        // Construct standard Upstash REST URL: "https://<host>"
-        const baseUrl = `https://${urlObj.hostname}`;
-        const token = urlObj.password;
-
-        redis = new Redis({
-            url: baseUrl,
-            token: token
-        });
-    } else if (process.env.UPSTASH_REDIS_REST_URL) {
+    } else if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+        // Standard Upstash env vars - use built-in helper
         redis = Redis.fromEnv();
     }
 } catch (e) {
@@ -48,7 +39,7 @@ try {
 
 const LIMITS = {
     FREE_TIER: 3,
-    UNLOCKED_TIER: 10,
+    UNLOCKED_TIER: 5,
 };
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -318,7 +309,8 @@ OUTPUT FORMAT (JSON only, no markdown):
 function errorResponse(res, status, code, message, extra = {}) {
     return res.status(status).json({
         success: false,
-        error: { code, message },
+        errorCode: code,  // Top-level for frontend retry logic
+        error: message,   // Simplified: string instead of object for easier frontend handling
         ...extra
     });
 }

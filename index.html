@@ -241,8 +241,21 @@
       }
     }
 
-    /* Print Styles */
+    /* Print Styles - Single page, investor-friendly readability */
     @media print {
+      @page {
+        size: auto;
+        margin: 12mm 10mm 12mm 10mm;
+      }
+
+      html,
+      body {
+        height: auto !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
       .no-print {
         display: none !important;
       }
@@ -250,8 +263,7 @@
       body {
         background: white !important;
         color: black !important;
-        font-size: 11pt;
-        /* Slightly smaller for single page */
+        font-size: 10pt;
         font-family: 'Newsreader', Georgia, serif !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
@@ -265,7 +277,6 @@
         display: block !important;
       }
 
-      /* Force all text to be readable in print */
       * {
         color: black !important;
       }
@@ -281,53 +292,103 @@
 
       .printable-scorecard {
         position: relative;
-        /* Changed from absolute to flow better */
         width: 100%;
-        padding: 0;
+        padding: 0 !important;
+        margin: 0 !important;
         page-break-inside: avoid;
+        page-break-after: avoid;
       }
 
-      /* Hide print button wrapper */
+      .printable-scorecard .border-2 {
+        padding: 16px !important;
+      }
+
       #print-btn {
         display: none !important;
       }
 
-      /* Table compacting */
       td {
         padding-top: 2px !important;
         padding-bottom: 2px !important;
+        line-height: 1.5 !important;
       }
 
       h1 {
-        font-size: 1.5rem !important;
-        margin-bottom: 0.5rem !important;
+        font-size: 1.4rem !important;
+        margin-bottom: 0.3rem !important;
+        margin-top: 0 !important;
       }
 
       h2 {
-        font-size: 1.1rem !important;
-        margin-bottom: 0.5rem !important;
-        margin-top: 1rem !important;
+        font-size: 1rem !important;
+        margin-bottom: 0.3rem !important;
+        margin-top: 0.5rem !important;
+      }
+
+      h3 {
+        font-size: 0.95rem !important;
+        margin-bottom: 0.25rem !important;
+      }
+
+      p {
+        margin: 0 !important;
+        line-height: 1.4 !important;
       }
 
       .p-8 {
-        padding: 1.5rem !important;
+        padding: 12px !important;
+      }
+
+      .p-6,
+      .p-4 {
+        padding: 10px !important;
+      }
+
+      .pb-4 {
+        padding-bottom: 8px !important;
+      }
+
+      .mb-6 {
+        margin-bottom: 12px !important;
+      }
+
+      .mb-4 {
+        margin-bottom: 8px !important;
+      }
+
+      .mt-6 {
+        margin-top: 10px !important;
+      }
+
+      .mt-2,
+      .mt-1 {
+        margin-top: 6px !important;
       }
 
       .gap-8 {
-        gap: 1rem !important;
+        gap: 16px !important;
       }
 
-      /* Print footer styling */
-      footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        padding: 12px 0;
+      .text-2xl {
+        font-size: 1.2rem !important;
+      }
+
+      .text-lg {
+        font-size: 1rem !important;
+      }
+
+      .text-sm {
+        font-size: 0.8rem !important;
+      }
+
+      /* Print footer - minimal but readable */
+      footer.print-only {
+        position: static;
+        margin-top: 10px;
+        padding: 6px 0;
         border-top: 1px solid #ddd;
-        background: white;
         text-align: center;
-        font-size: 9pt;
+        font-size: 8pt;
         color: #666 !important;
       }
     }
@@ -444,14 +505,25 @@
         </div>
       </div>
       <div class="flex items-center gap-4">
-        <button id="reset-app" class="text-xs text-ivory/40 hover:text-coral transition-colors font-serif">
-          Clear Data
-        </button>
         <!-- Usage Counter Pill -->
         <div id="usage-pill"
           class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald/10 border border-emerald/20 transition-all">
-          <span class="text-emerald text-sm font-mono" id="usage-count">8/8</span>
+          <span class="text-emerald text-sm font-mono" id="usage-count">3/3</span>
           <span class="text-ivory/40 text-xs">free</span>
+        </div>
+        <!-- Overflow Menu -->
+        <div class="relative">
+          <button id="overflow-menu-btn"
+            class="w-8 h-8 flex items-center justify-center rounded-lg text-ivory/40 hover:text-ivory hover:bg-ivory/5 transition-all text-lg">
+            ⋯
+          </button>
+          <div id="overflow-menu"
+            class="hidden absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-lg bg-surface-850 border border-ivory/10 shadow-xl z-50">
+            <button id="reset-app"
+              class="w-full px-4 py-2 text-left text-sm text-ivory/60 hover:text-coral hover:bg-ivory/5 transition-colors">
+              Reset All
+            </button>
+          </div>
         </div>
       </div>
 
@@ -521,7 +593,7 @@
         <div id="email-capture"
           class="hidden no-print p-4 rounded-xl bg-gradient-to-r from-gold/10 to-transparent border border-gold/20 animate-fadeUp">
           <p class="text-sm text-ivory mb-3">
-            ⚡ <strong>Unlock up to 10 daily analyses.</strong> Get bonus uses + early Pro access.
+            ⚡ <strong>Unlock 5 daily analyses.</strong> Early Pro access included.
           </p>
           <div class="flex gap-2">
             <input type="email" id="capture-email" placeholder="your@email.com"
@@ -551,7 +623,7 @@
             </a>
           </div>
 
-          <p class="text-ivory/30 text-xs mt-4">Or come back tomorrow for 8 more free analyses</p>
+          <p class="text-ivory/30 text-xs mt-4">Or come back tomorrow for 3 more free analyses</p>
         </div>
 
         <!-- Property Data Card -->
@@ -696,7 +768,7 @@
               <p id="metric-noi" class="text-2xl font-bold font-mono text-white">$0</p>
               <p class="text-xs text-white/40">Per year</p>
               <p id="metric-vacancy-assumption" class="text-xs text-white/30 mt-1">Using 5% vacancy</p>
-              <p id="metric-broker-noi" class="text-xs text-white/30 mt-2 hidden">Broker: <span
+              <p id="metric-broker-noi" class="text-xs text-amber-400 mt-1 hidden">Broker: <span
                   class="font-mono">$0</span></p>
             </div>
 
@@ -1062,10 +1134,15 @@
         detail: 'Too many requests. Please wait a moment and try again.',
         canRetry: true
       },
+      AI_RATE_LIMIT: {
+        title: 'AI is busy',
+        detail: 'AI service is overloaded. Retrying automatically...',
+        canRetry: true
+      },
       SERVER_ERROR: {
         title: 'Server hiccup',
         detail: 'Our AI service is temporarily unavailable. Try again in a minute.',
-        canRetry: true
+        canRetry: false  // Don't auto-retry server errors to avoid hammering
       },
       PAYLOAD_TOO_LARGE: {
         title: 'File too large',
@@ -1086,6 +1163,12 @@
 
     let pendingFile = null; // Track file for retry
     let errorToastTimeout = null;
+
+    // Auto-retry configuration
+    const RETRYABLE_CODES = ['RATE_LIMIT', 'AI_RATE_LIMIT'];
+    const MAX_SESSION_RETRIES = 5;
+    const MAX_RETRIES_PER_REQUEST = 2;
+    let sessionRetryCount = 0;
 
     function showErrorToast(errorType, rawError) {
       const config = ERROR_MESSAGES[errorType] || ERROR_MESSAGES.API_ERROR;
@@ -1120,7 +1203,12 @@
       }
     }
 
-    function getErrorType(error) {
+    function getErrorType(error, errorCode = null) {
+      // Prefer backend errorCode if available
+      if (errorCode && ERROR_MESSAGES[errorCode]) {
+        return errorCode;
+      }
+
       if (!error) return 'API_ERROR';
       const errorStr = String(error).toLowerCase();
 
@@ -1130,6 +1218,37 @@
       if (errorStr.includes('500') || errorStr.includes('503') || errorStr.includes('unavailable')) return 'SERVER_ERROR';
 
       return 'API_ERROR';
+    }
+
+    // Auto-retry with exponential backoff (only for RETRYABLE_CODES)
+    async function callWithRetry(apiCall, maxRetries = MAX_RETRIES_PER_REQUEST) {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const result = await apiCall();
+
+        if (result.success) {
+          return result;
+        }
+
+        const errorCode = result.errorCode || getErrorType(result.error);
+        const isRetryable = RETRYABLE_CODES.includes(errorCode);
+        const budgetRemaining = sessionRetryCount < MAX_SESSION_RETRIES;
+        const hasRetriesLeft = attempt < maxRetries;
+
+        if (!isRetryable || !budgetRemaining || !hasRetriesLeft) {
+          return result; // Return error, no more retries
+        }
+
+        // Increment session budget
+        sessionRetryCount++;
+
+        // Show retrying toast
+        const delaySeconds = Math.pow(2, attempt);
+        showErrorToast('AI_RATE_LIMIT', `Retrying in ${delaySeconds}s... (${MAX_RETRIES_PER_REQUEST - attempt} left)`);
+
+        // Wait with exponential backoff
+        await new Promise(r => setTimeout(r, delaySeconds * 1000));
+        dismissErrorToast();
+      }
     }
 
     // Initialize
@@ -1169,8 +1288,8 @@
 
       // Reset if new day - preserve emailUnlocked status across days
       if (stored.date !== today) {
-        // Unlocked users get 10/day, free users get 3/day (matches backend)
-        const limit = hasEmailOnFile ? 10 : 3;
+        // Unlocked users get 5/day, free users get 3/day (matches backend)
+        const limit = hasEmailOnFile ? 5 : 3;
         return { date: today, count: 0, remaining: limit, limit, emailUnlocked: hasEmailOnFile };
       }
       return stored;
@@ -1184,9 +1303,9 @@
       const usage = getUsageState();
       const hasEmail = !!localStorage.getItem(STORAGE_KEYS.EMAIL);
 
-      // Default remaining for fresh state (3 free / 10 unlocked)
-      const remaining = usage.remaining !== undefined ? usage.remaining : (hasEmail ? 10 : 3);
-      const limit = hasEmail ? 10 : 3;
+      // Default remaining for fresh state (3 free / 5 unlocked)
+      const remaining = usage.remaining !== undefined ? usage.remaining : (hasEmail ? 5 : 3);
+      const limit = hasEmail ? 5 : 3;
 
       updateUsageUI(remaining, limit);
       checkUsageThresholds(remaining, limit, hasEmail);
@@ -1261,7 +1380,7 @@
         // Update local usage state to reflect new limit
         const usage = getUsageState();
         usage.emailUnlocked = true;
-        usage.limit = data.limit || 10;
+        usage.limit = data.limit || 5;
         usage.remaining = usage.limit - usage.count;
         saveUsageState(usage);
 
@@ -1279,6 +1398,19 @@
     }
 
     function setupEventListeners() {
+
+      // Overflow menu toggle
+      const overflowBtn = document.getElementById('overflow-menu-btn');
+      const overflowMenu = document.getElementById('overflow-menu');
+
+      overflowBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        overflowMenu?.classList.toggle('hidden');
+      });
+
+      document.addEventListener('click', () => {
+        overflowMenu?.classList.add('hidden');
+      });
 
       uploadZone.addEventListener('click', () => fileInput.click());
 
@@ -1400,7 +1532,7 @@
       const hasEmail = !!localStorage.getItem(STORAGE_KEYS.EMAIL);
 
       if (usage.remaining !== undefined && usage.remaining <= 0) {
-        checkUsageThresholds(0, usage.limit || 8, hasEmail);
+        checkUsageThresholds(0, usage.limit || 5, hasEmail);
         return;
       }
 
@@ -1412,7 +1544,8 @@
       document.getElementById('preview-icon').textContent = file.type.includes('pdf') ? '📄' : '🖼️';
 
       // Visual Compression happens inside extractPropertyData
-      const result = await extractPropertyData(file);
+      // Wrap with auto-retry for rate limit errors only
+      const result = await callWithRetry(() => extractPropertyData(file));
 
       uploadLoading.classList.add('hidden');
       uploadIdle.classList.remove('hidden');
@@ -1426,7 +1559,7 @@
         // ... (rest of success logic) ...
         // Update usage from API response
         const remaining = result.remaining !== undefined ? result.remaining : (usage.remaining - 1);
-        const limit = result.limit || usage.limit || 8;
+        const limit = result.limit || usage.limit || 5;
         const needsEmail = result.needsEmail;
 
         const newUsage = { ...usage, remaining, limit, count: (usage.count || 0) + 1 };
@@ -1442,11 +1575,12 @@
       } else if (result.errorCode === 'RATE_LIMIT' || result.errorCode === 'DAILY_LIMIT' || (result.error && typeof result.error === 'string' && result.error.includes('Daily limit'))) {
         const newUsage = { ...usage, remaining: 0 };
         saveUsageState(newUsage);
-        updateUsageUI(0, result.limit || usage.limit || 8);
-        checkUsageThresholds(0, result.limit || 8, hasEmail);
+        updateUsageUI(0, result.limit || usage.limit || 5);
+        checkUsageThresholds(0, result.limit || 5, hasEmail);
         showErrorToast('DAILY_LIMIT', result.error);
       } else {
-        const errorType = getErrorType(result.error);
+        // Use backend errorCode if available, otherwise detect from error string
+        const errorType = getErrorType(result.error, result.errorCode);
         showErrorToast(errorType, result.error);
       }
     }
@@ -1568,7 +1702,7 @@
 
     function updateMetrics() {
       const vacancyRate = isStressTest ? 0.10 : 0.05;
-      const useStatedValues = !isStressTest; // If stress testing, force calculated values (ignore broker NOI)
+      const useStatedValues = false; // Always use investor-calculated NOI, show broker NOI as reference
       const metrics = calculateROI(propertyData, { vacancyRate, useStatedValues });
 
       document.getElementById('metric-noi').textContent = formatCurrency(metrics.noi);
@@ -1589,20 +1723,12 @@
         vacancyElement.classList.add('text-white/30');
       }
 
-      // Always show broker NOI if available
+      // Always show broker NOI in amber if available
       const brokerNoiElement = document.getElementById('metric-broker-noi');
       if (metrics.brokerNoi > 0) {
         brokerNoiElement.classList.remove('hidden');
         const brokerSpan = brokerNoiElement.querySelector('span');
         brokerSpan.textContent = formatCurrency(metrics.brokerNoi);
-        // Highlight in amber if it differs significantly from calculated
-        if (Math.abs(metrics.brokerNoi - metrics.noi) > 100) {
-          brokerNoiElement.classList.add('text-amber-400/60');
-          brokerNoiElement.classList.remove('text-white/30');
-        } else {
-          brokerNoiElement.classList.remove('text-amber-400/60');
-          brokerNoiElement.classList.add('text-white/30');
-        }
       } else {
         brokerNoiElement.classList.add('hidden');
       }
@@ -1622,12 +1748,17 @@
       // Respect Stress Test Toggle
       const isStressed = document.getElementById('stress-toggle')?.checked;
 
+      // CRITICAL: Match screen display logic - always use investor-calculated NOI
       const options = isStressed ? {
         vacancyRate: 0.10, // 10%
         repairsRate: 0.10, // 10%
         loanTerms: { down: 0.20, rate: 0.095, years: 30 }, // 9.5% rate
         useStatedValues: false // Force calculation
-      } : {}; // Defaults (5% vacancy, 7.5% rate)
+      } : {
+        vacancyRate: 0.05,
+        repairsRate: 0.08,
+        useStatedValues: false // Always use investor-calculated NOI (matches screen)
+      };
 
       const metrics = calculateROI(propertyData, options);
 
