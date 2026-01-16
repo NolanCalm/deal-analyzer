@@ -1761,7 +1761,7 @@
       // Add Stress Test indicator to title if active
       const titleEl = document.querySelector('#printable-scorecard h1');
       if (titleEl) {
-        titleEl.innerHTML = isStressed ? 'PROPERTY DEAL SCORECARD <span style="font-size: 0.8em; color: #dc2626;">(STRESS TEST)</span>' : 'PROPERTY DEAL SCORECARD';
+        titleEl.innerHTML = isStressTest ? 'PROPERTY DEAL SCORECARD <span style="font-size: 0.8em; color: #dc2626;">(STRESS TEST)</span>' : 'PROPERTY DEAL SCORECARD';
       }
 
       document.getElementById('print-address').textContent = propertyData.address || 'Property Address';
