@@ -1557,9 +1557,11 @@
       }, 500);
 
       if (result.success) {
-        // ... (rest of success logic) ...
-        // Update usage from API response
-        const remaining = result.remaining !== undefined ? result.remaining : (usage.remaining - 1);
+        // Update usage: prefer local decrement, only use API's remaining if it's lower (more restrictive)
+        const localRemaining = Math.max(0, (usage.remaining ?? usage.limit ?? 3) - 1);
+        const remaining = (result.remaining !== undefined && result.remaining < localRemaining)
+          ? result.remaining
+          : localRemaining;
         const limit = result.limit || usage.limit || 5;
         const needsEmail = result.needsEmail;
 
