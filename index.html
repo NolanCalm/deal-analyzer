@@ -1462,10 +1462,8 @@
       });
 
       resetAppBtn.addEventListener('click', () => {
-        if (confirm('Clear all data and reset trials?')) {
+        if (confirm('Clear all property data and start over?')) {
           localStorage.removeItem(STORAGE_KEYS.PROPERTY_DATA);
-          localStorage.removeItem(STORAGE_KEYS.USAGE);
-          localStorage.removeItem(STORAGE_KEYS.EMAIL);
           location.reload();
         }
       });
