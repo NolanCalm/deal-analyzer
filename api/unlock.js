@@ -26,7 +26,7 @@ function generateStatelessToken(email) {
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
-        return res.status(405).json({ success: false, error: { code: 'METHOD_NOT_ALLOWED', message: 'Method Not Allowed' } });
+        return res.status(405).json({ success: false, errorCode: 'METHOD_NOT_ALLOWED', error: 'Method Not Allowed' });
     }
 
     const { email } = req.body;
@@ -34,7 +34,8 @@ export default async function handler(req, res) {
     if (!email || typeof email !== 'string' || !email.includes('@') || email.length > 254) {
         return res.status(400).json({
             success: false,
-            error: { code: 'INVALID_EMAIL', message: 'Please provide a valid email address' }
+            errorCode: 'INVALID_EMAIL',
+            error: 'Please provide a valid email address'
         });
     }
 
@@ -43,7 +44,8 @@ export default async function handler(req, res) {
     if (!emailRegex.test(sanitizedEmail)) {
         return res.status(400).json({
             success: false,
-            error: { code: 'INVALID_EMAIL', message: 'Invalid email format' }
+            errorCode: 'INVALID_EMAIL',
+            error: 'Invalid email format'
         });
     }
 
@@ -79,8 +81,8 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
             success: true,
-            message: 'Email unlocked! You now have 10 analyses per day.',
-            limit: 10
+            message: 'Email unlocked! You now have 5 analyses per day.',
+            limit: 5
         });
 
     } catch (error) {
@@ -89,7 +91,8 @@ export default async function handler(req, res) {
         // No, catch block usually implies generated failed.
         return res.status(500).json({
             success: false,
-            error: { code: 'SERVER_ERROR', message: 'Failed to unlock.', details: error.message }
+            errorCode: 'SERVER_ERROR',
+            error: 'Failed to unlock. Please try again.'
         });
     }
 }
