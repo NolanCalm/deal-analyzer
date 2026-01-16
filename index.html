@@ -1745,19 +1745,15 @@
     }
 
     function updatePrintScorecard() {
-      // Respect Stress Test Toggle
+      // Respect Stress Test Toggle - MUST match updateMetrics() logic exactly
       const isStressed = document.getElementById('stress-toggle')?.checked;
 
-      // CRITICAL: Match screen display logic - always use investor-calculated NOI
-      const options = isStressed ? {
-        vacancyRate: 0.10, // 10%
-        repairsRate: 0.10, // 10%
-        loanTerms: { down: 0.20, rate: 0.095, years: 30 }, // 9.5% rate
-        useStatedValues: false // Force calculation
-      } : {
-        vacancyRate: 0.05,
-        repairsRate: 0.08,
-        useStatedValues: false // Always use investor-calculated NOI (matches screen)
+      // Match screen display logic - only vacancy changes for stress test
+      const vacancyRate = isStressed ? 0.10 : 0.05;
+      const options = {
+        vacancyRate: vacancyRate,
+        // Use defaults for repairs and loan terms (matches screen)
+        useStatedValues: false // Always use investor-calculated NOI
       };
 
       const metrics = calculateROI(propertyData, options);
