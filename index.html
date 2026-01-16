@@ -22,6 +22,8 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
   <!-- Google Fonts: Bricolage Grotesque + Newsreader -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,10 +63,17 @@
       --surface-950: #0a0a0d;
       --surface-850: #16161a;
       --surface-800: #1a1a1f;
-      --ivory: #f5f0e8;
+      --ivory: '#f5f0e8';
       --gold: #c9a962;
       --emerald: #2dd4a8;
       --coral: #f07167;
+    }
+
+    /* Icon Sizing & Alignment */
+    i.ph-duotone {
+      font-size: 1.25em;
+      vertical-align: middle;
+      display: inline-block;
     }
 
     /* Base Styles */
@@ -279,6 +288,12 @@
 
       * {
         color: black !important;
+        text-shadow: none !important;
+      }
+
+      /* Fix icons for print if needed, or hide them */
+      i.ph-duotone {
+        color: black !important;
       }
 
       .glass,
@@ -328,6 +343,7 @@
       h3 {
         font-size: 0.95rem !important;
         margin-bottom: 0.25rem !important;
+        margin-top: 0.5rem !important;
       }
 
       p {
@@ -425,6 +441,9 @@
 
     .error-icon {
       font-size: 1.5rem;
+      color: var(--coral);
+      display: flex;
+      align-items: center;
     }
 
     .error-message {
@@ -469,6 +488,8 @@
       cursor: pointer;
       padding: 0.25rem;
       transition: opacity 0.2s;
+      display: flex;
+      align-items: center;
     }
 
     .dismiss-btn:hover {
@@ -496,8 +517,8 @@
     <div class="max-w-6xl mx-auto px-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div
-          class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald to-emerald/70 flex items-center justify-center text-xl">
-          🏢
+          class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald to-emerald/70 flex items-center justify-center text-xl text-surface-950">
+          <i class="ph-duotone ph-buildings text-2xl"></i>
         </div>
         <div>
           <h1 class="font-bold text-lg tracking-tight text-ivory">Property Deal Analyzer</h1>
@@ -515,7 +536,7 @@
         <div class="relative">
           <button id="overflow-menu-btn"
             class="w-8 h-8 flex items-center justify-center rounded-lg text-ivory/40 hover:text-ivory hover:bg-ivory/5 transition-all text-lg">
-            ⋯
+            <i class="ph-duotone ph-dots-three-circle text-2xl"></i>
           </button>
           <div id="overflow-menu"
             class="hidden absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-lg bg-surface-850 border border-ivory/10 shadow-xl z-50">
@@ -533,13 +554,13 @@
   <!-- Error Toast -->
   <div id="error-toast" class="error-toast hidden">
     <div class="error-toast-content">
-      <span class="error-icon">⚠️</span>
+      <span class="error-icon"><i class="ph-duotone ph-warning-octagon"></i></span>
       <div class="error-message">
         <strong id="error-title">Oops!</strong>
         <p id="error-detail">Something went wrong.</p>
       </div>
       <button id="error-retry" class="retry-btn">Try Again</button>
-      <button id="error-dismiss" class="dismiss-btn">×</button>
+      <button id="error-dismiss" class="dismiss-btn"><i class="ph-duotone ph-x"></i></button>
     </div>
   </div>
 
@@ -563,13 +584,14 @@
 
           <div id="upload-zone" class="upload-zone rounded-xl p-8 text-center cursor-pointer">
             <div id="upload-idle" class="space-y-3">
-              <div class="text-4xl">📄</div>
+              <div class="text-4xl text-emerald"><i class="ph-duotone ph-file-arrow-up text-5xl"></i></div>
               <p class="font-medium text-ivory">Drop PDF or Image here</p>
               <p class="text-sm text-ivory/40 font-serif">or click to browse • Large PDFs auto-compressed</p>
             </div>
 
             <div id="upload-loading" class="hidden space-y-4">
-              <div class="spinner w-12 h-12 rounded-full mx-auto"></div>
+              <!-- Replaced custom CSS spinner with Phosphor Icon animated spinner -->
+              <div class="mx-auto text-emerald"><i class="ph-duotone ph-spinner-gap text-5xl animate-spin"></i></div>
               <p id="loading-text" class="font-medium text-emerald">AI is auditing pro-forma...</p>
               <p class="text-sm text-ivory/40 font-serif">Extracting property data</p>
             </div>
@@ -579,13 +601,14 @@
 
           <!-- Preview -->
           <div id="file-preview" class="hidden mt-4 p-3 rounded-xl bg-black/30 flex items-center gap-3">
-            <div class="w-12 h-12 rounded-lg bg-ivory/5 flex items-center justify-center text-2xl" id="preview-icon">📄
+            <div class="w-12 h-12 rounded-lg bg-ivory/5 flex items-center justify-center text-2xl" id="preview-icon">
+              <i class="ph-duotone ph-file-pdf"></i>
             </div>
             <div class="flex-1 min-w-0">
               <p id="preview-name" class="font-medium truncate text-ivory">filename.pdf</p>
               <p id="preview-size" class="text-xs text-ivory/40 font-serif">2.3 MB</p>
             </div>
-            <button id="clear-file" class="text-ivory/40 hover:text-ivory">✕</button>
+            <button id="clear-file" class="text-ivory/40 hover:text-ivory"><i class="ph-duotone ph-x"></i></button>
           </div>
         </section>
 
@@ -593,14 +616,15 @@
         <div id="email-capture"
           class="hidden no-print p-4 rounded-xl bg-gradient-to-r from-gold/10 to-transparent border border-gold/20 animate-fadeUp">
           <p class="text-sm text-ivory mb-3">
-            ⚡ <strong>Unlock 5 daily analyses.</strong> Early Pro access included.
+            <i class="ph-duotone ph-lightning text-gold mr-1"></i> <strong>Unlock 5 daily analyses.</strong> Early Pro
+            access included.
           </p>
           <div class="flex gap-2">
             <input type="email" id="capture-email" placeholder="your@email.com"
               class="flex-1 px-3 py-2 rounded-lg bg-black/30 border border-ivory/10 text-ivory focus:border-gold/50 focus:outline-none transition-colors">
             <button id="capture-submit"
-              class="px-4 py-2 rounded-lg bg-gold text-surface-950 font-bold hover:bg-gold/90 transition-colors">
-              Unlock ✨
+              class="px-4 py-2 rounded-lg bg-gold text-surface-950 font-bold hover:bg-gold/90 transition-colors flex items-center gap-2">
+              Unlock <i class="ph-duotone ph-sparkle"></i>
             </button>
           </div>
           <p class="text-xs text-ivory/30 mt-2">Email used only for your account. No spam.</p>
@@ -608,14 +632,15 @@
 
         <!-- Blocked State (shows when daily limit reached) -->
         <div id="blocked-state" class="hidden no-print glass rounded-2xl p-8 text-center animate-fadeUp">
-          <p class="text-3xl mb-3">🔒</p>
+          <p class="text-3xl mb-3 text-ivory/50"><i class="ph-duotone ph-lock-key text-5xl"></i></p>
           <p class="text-ivory font-bold text-lg">Daily limit reached</p>
           <p class="text-ivory/50 text-sm mt-2">You've analyzed a lot of properties today!</p>
 
           <!-- Pro CTA -->
           <div
             class="mt-6 p-4 rounded-xl bg-gradient-to-r from-emerald/10 to-transparent border border-emerald/20 max-w-sm mx-auto">
-            <p class="text-emerald font-bold">🚀 Need unlimited analyses?</p>
+            <p class="text-emerald font-bold flex items-center justify-center gap-2"><i
+                class="ph-duotone ph-rocket-launch"></i> Need unlimited analyses?</p>
             <p class="text-ivory/60 text-sm mt-1">Pro tier launching soon. Get early access.</p>
             <a href="mailto:nolancalm@gmail.com?subject=Pro%20Access%20Interest&body=Hi%20Nolan,%0A%0AI'm%20interested%20in%20unlimited%20access%20to%20the%20Property%20Deal%20Analyzer."
               class="inline-block mt-3 px-4 py-2 rounded-lg bg-emerald text-surface-950 font-bold text-sm hover:bg-emerald/90 transition-colors">
@@ -751,7 +776,7 @@
           <div id="verdict-banner"
             class="mb-6 p-4 rounded-xl bg-gradient-to-r from-emerald/10 to-transparent border border-emerald/20">
             <div class="flex items-center gap-3">
-              <span id="verdict-emoji" class="text-3xl">🟢</span>
+              <span id="verdict-emoji" class="text-3xl"><i class="ph-duotone ph-check-circle"></i></span>
               <div>
                 <p id="verdict-text" class="font-bold text-lg verdict-excellent">Strong Buy</p>
                 <p id="verdict-sub" class="text-sm text-ivory/60 font-serif">At this price, you're getting solid returns
@@ -804,7 +829,7 @@
           <!-- Print Button -->
           <button id="print-btn"
             class="mt-6 w-full py-4 px-6 rounded-xl bg-gradient-to-r from-emerald to-emerald/80 font-bold text-lg text-surface-950 hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-            <span>📄</span> Generate Offer Scorecard
+            <span><i class="ph-duotone ph-printer"></i></span> Generate Offer Scorecard
           </button>
 
         </section>
@@ -969,13 +994,13 @@
 
     function getDealVerdict(capRate, cashOnCash) {
       if (capRate >= 8 && cashOnCash >= 10) {
-        return { rating: 'excellent', emoji: '🟢', text: 'Strong Buy' };
+        return { rating: 'excellent', emoji: '<i class="ph-duotone ph-check-circle text-emerald"></i>', text: 'Strong Buy' };
       } else if (capRate >= 6 && cashOnCash >= 5) {
-        return { rating: 'good', emoji: '🟡', text: 'Worth Negotiating' };
+        return { rating: 'good', emoji: '<i class="ph-duotone ph-warning text-gold"></i>', text: 'Worth Negotiating' };
       } else if (capRate >= 4) {
-        return { rating: 'fair', emoji: '🟠', text: 'Below Market - Negotiate Hard' };
+        return { rating: 'fair', emoji: '<i class="ph-duotone ph-warning-octagon text-[#f59e0b]"></i>', text: 'Below Market - Negotiate Hard' };
       } else {
-        return { rating: 'poor', emoji: '🔴', text: 'Walk Away' };
+        return { rating: 'poor', emoji: '<i class="ph-duotone ph-x-circle text-coral"></i>', text: 'Walk Away' };
       }
     }
 
@@ -1477,13 +1502,13 @@
         const success = await captureEmailSubmit(email);
 
         if (success) {
-          captureSubmit.textContent = 'Unlocked! ✓';
+          captureSubmit.innerHTML = 'Unlocked! <i class="ph-duotone ph-check"></i>';
           setTimeout(() => {
-            captureSubmit.textContent = 'Unlock ✨';
+            captureSubmit.innerHTML = 'Unlock <i class="ph-duotone ph-sparkle"></i>';
             captureSubmit.disabled = false;
           }, 2000);
         } else {
-          captureSubmit.textContent = 'Unlock ✨';
+          captureSubmit.innerHTML = 'Unlock <i class="ph-duotone ph-sparkle"></i>';
           captureSubmit.disabled = false;
         }
       });
@@ -1542,7 +1567,7 @@
 
       document.getElementById('preview-name').textContent = file.name;
       document.getElementById('preview-size').textContent = formatFileSize(file.size);
-      document.getElementById('preview-icon').textContent = file.type.includes('pdf') ? '📄' : '🖼️';
+      document.getElementById('preview-icon').innerHTML = file.type.includes('pdf') ? '<i class="ph-duotone ph-file-pdf"></i>' : '<i class="ph-duotone ph-image"></i>';
 
       // Visual Compression happens inside extractPropertyData
       // Wrap with auto-retry for rate limit errors only
@@ -1740,7 +1765,7 @@
       }
 
       const verdict = currentMetrics.dealVerdict;
-      document.getElementById('verdict-emoji').textContent = verdict.emoji;
+      document.getElementById('verdict-emoji').innerHTML = verdict.emoji;
       document.getElementById('verdict-text').textContent = verdict.text;
       document.getElementById('verdict-text').className = `font-bold text-lg verdict-${verdict.rating}`;
 
