@@ -1046,11 +1046,11 @@
 
       // Handle rate limit response
       if (response.status === 429) {
-        const errorMsg = data.error?.message || data.error || 'Daily limit reached';
+        const errorMsg = data.error || 'Daily limit reached';
         return {
           success: false,
           error: errorMsg,
-          errorCode: data.error?.code || 'RATE_LIMIT',
+          errorCode: data.errorCode || 'RATE_LIMIT',  // Read from top-level (backend standardized)
           remaining: data.remaining,
           limit: data.limit,
           needsEmail: data.needsEmail
