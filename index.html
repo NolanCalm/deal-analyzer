@@ -1083,6 +1083,7 @@
     };
     let estimates = [];
     let isStressTest = false;
+    let currentMetrics = null; // Shared state - single source of truth for screen and print
 
     // Usage tracking state
     const STORAGE_KEYS = {
@@ -1703,13 +1704,16 @@
     function updateMetrics() {
       const vacancyRate = isStressTest ? 0.10 : 0.05;
       const useStatedValues = false; // Always use investor-calculated NOI, show broker NOI as reference
-      const metrics = calculateROI(propertyData, { vacancyRate, useStatedValues });
 
-      document.getElementById('metric-noi').textContent = formatCurrency(metrics.noi);
-      document.getElementById('metric-caprate').textContent = formatPercent(metrics.capRate);
-      document.getElementById('metric-coc').textContent = formatPercent(metrics.cashOnCash);
-      document.getElementById('metric-maxoffer').textContent = formatCurrency(metrics.maxOffer);
-      document.getElementById('metric-monthly').textContent = formatCurrency(metrics.cashFlow / 12);
+      // Calculate once, store in shared state
+      currentMetrics = calculateROI(propertyData, { vacancyRate, useStatedValues });
+
+      // Update screen display
+      document.getElementById('metric-noi').textContent = formatCurrency(currentMetrics.noi);
+      document.getElementById('metric-caprate').textContent = formatPercent(currentMetrics.capRate);
+      document.getElementById('metric-coc').textContent = formatPercent(currentMetrics.cashOnCash);
+      document.getElementById('metric-maxoffer').textContent = formatCurrency(currentMetrics.maxOffer);
+      document.getElementById('metric-monthly').textContent = formatCurrency(currentMetrics.cashFlow / 12);
 
       // Update vacancy assumption indicator
       const vacancyElement = document.getElementById('metric-vacancy-assumption');
@@ -1725,38 +1729,34 @@
 
       // Always show broker NOI in amber if available
       const brokerNoiElement = document.getElementById('metric-broker-noi');
-      if (metrics.brokerNoi > 0) {
+      if (currentMetrics.brokerNoi > 0) {
         brokerNoiElement.classList.remove('hidden');
         const brokerSpan = brokerNoiElement.querySelector('span');
-        brokerSpan.textContent = formatCurrency(metrics.brokerNoi);
+        brokerSpan.textContent = formatCurrency(currentMetrics.brokerNoi);
       } else {
         brokerNoiElement.classList.add('hidden');
       }
 
-      const verdict = metrics.dealVerdict;
+      const verdict = currentMetrics.dealVerdict;
       document.getElementById('verdict-emoji').textContent = verdict.emoji;
       document.getElementById('verdict-text').textContent = verdict.text;
       document.getElementById('verdict-text').className = `font-bold text-lg verdict-${verdict.rating}`;
 
-      const subtext = metrics.capRate >= 7
-        ? `At this price, you're getting ${formatPercent(metrics.capRate)} cap rate`
-        : `You need to negotiate down to ${formatCurrency(metrics.maxOffer)} for 7% cap`;
+      const subtext = currentMetrics.capRate >= 7
+        ? `At this price, you're getting ${formatPercent(currentMetrics.capRate)} cap rate`
+        : `You need to negotiate down to ${formatCurrency(currentMetrics.maxOffer)} for 7% cap`;
       document.getElementById('verdict-sub').textContent = subtext;
+
+      // Auto-sync print scorecard with same values
+      updatePrintScorecard();
     }
 
     function updatePrintScorecard() {
-      // Respect Stress Test Toggle - MUST match updateMetrics() logic exactly
-      const isStressed = document.getElementById('stress-toggle')?.checked;
+      // Guard: ensure metrics are calculated
+      if (!currentMetrics) return;
 
-      // Match screen display logic - only vacancy changes for stress test
-      const vacancyRate = isStressed ? 0.10 : 0.05;
-      const options = {
-        vacancyRate: vacancyRate,
-        // Use defaults for repairs and loan terms (matches screen)
-        useStatedValues: false // Always use investor-calculated NOI
-      };
-
-      const metrics = calculateROI(propertyData, options);
+      // Use shared metrics - no recalculation needed
+      const metrics = currentMetrics;
 
       // Add Stress Test indicator to title if active
       const titleEl = document.querySelector('#printable-scorecard h1');
